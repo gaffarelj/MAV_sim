@@ -1,0 +1,14 @@
+# Species data
+
+# ID
+# Molwt (amu)
+# Molmass (kg)
+# Rotational dof
+# RotRel
+# Vibrational dof
+# VibRel
+# VibTemp (K)
+# species wt
+# charge
+
+COe  28.01    4.65E-26       2    0.2   2    0.004         2751.0    1.0	     0.0
