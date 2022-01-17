@@ -348,3 +348,12 @@ MigrationBackup/
 
 # Ionide (cross platform F# VS Code tools) working folder
 .ionide/
+
+# SPARTA and ParaView
+*.pvd
+*.pvtu
+*.vtu
+log.sparta
+SPARTA/setup/results_sparta/*/*.dat
+#SPARTA/setup/STL/*ASCII.stl
+#SPARTA/setup/data/data*
