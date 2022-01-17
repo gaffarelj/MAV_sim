@@ -1,7 +1,10 @@
 import numpy as np
 import sys
 sys.path.append("/mnt/c/TUDAT/tudat-bundle/build/tudatpy")
-sys.path.insert(0, "/mnt/c/Users/jerem/OneDrive - Delft University of Technology/current/Thesis")
+# Set path to uppermost project level
+sys.path = [p for p in sys.path if p != ""]
+while sys.path[0].split("/")[-1] != "MAV_sim":
+    sys.path.insert(0,"/".join(sys.path[0].split("/")[:-1]))
 import os
 import shutil
 import tudatpy.util as TU
@@ -44,8 +47,9 @@ fracs = [
     np.array([65.826, 11.923, 4.910, 7.796, 8.533, 1.012])/100
 ]
 
-run_all_cmd = "#!/bin/sh\nmodule load openmpi\n"
-run_all_cmd += "export PATH=\"/mnt/c/Users/jerem/Downloads/sparta-master/build/src\":$PATH\n"
+run_all_cmd = "#!/bin/sh\n"
+run_all_cmd += "module load gnu/7\n"
+run_all_cmd += "module load openmpi\n"
 paraview_surf = ""
 paraview_grid = ""
 for j, s_name in enumerate(vehicle_names):
