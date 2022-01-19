@@ -11,15 +11,17 @@ import tudatpy.util as TU
 
 
 tot_epochs = [1500, 1500, 1500]             # Number of simulation epochs for each altitude (should be multiple of 1000)
-run_fractions = [15/30, 5/30, 4/30, 6/30]   # Epochs at which to switch from initial run [0] to refinements [1 to -2] to final refinement and run [-1]
-refinement_factors = [2, 2, 2]              # Factor by which to scale the grid
-refine_region = [False, False, False]         # When True, only refine the grid in the region where the vehicle is
+run_fractions = [15/30, 10/30, 5/30]   # Epochs at which to switch from initial run [0] to refinements [1 to -2] to final refinement and run [-1]
+refinement_factors = [2, 2]              # Factor by which to scale the grid
+refine_region = [False, False]         # When True, only refine the grid in the region where the vehicle is
 # Scale the number of particles by these
 particles_scales = {
     85: [20, 5, 10, 5, 5],
-    115: [1, 5, 10, 5, 5],#[500, 5, 10, 5, 5],
+    115: [500, 5, 10, 5, 5],#[500, 5, 10, 5, 5],
     150: [1500, 5, 10, 5, 5]
 }
+# Set whether to use the exhaust plume or not
+use_exhaust = False
 # List of vehicle names
 vehicle_names = ["MAV_stage_2"]
 # List of vehicle reference lengths
@@ -183,7 +185,8 @@ for j, s_name in enumerate(vehicle_names):
         input_s += "species             ../atmo.species CO2 N2 Ar CO O O2\n"
         for n, sp_n in enumerate(species_names):
             input_s += "mixture             atmo %s frac %.4f\n" % (sp_n, species_frac[n])
-        input_s += "mixture             exhaust CO nrho 9.8415e+20 vstream -2370.0 0.0 0.0 temp 2200.0\n" # nrho 9.8415e+22
+        if use_exhaust:
+            input_s += "mixture             exhaust CO nrho 9.8415e+20 vstream -2370.0 0.0 0.0 temp 2200.0\n" # nrho 9.8415e+22
         input_s += "collide             vss all ../atmo.vss\n"
         input_s += "\n"
         vehicle_centre = L_vehicles[j]/2
@@ -195,7 +198,8 @@ for j, s_name in enumerate(vehicle_names):
             (-vehicle_centre-0.001, -vehicle_centre+0.001, widths[j], widths[j], widths[j], widths[j])
         input_s += "\n"
         input_s += "fix                 in emit/face atmo xhi zhi zlo yhi ylo\n"
-        input_s += "fix                 prop_out emit/surf exhaust all\n"
+        if use_exhaust:
+            input_s += "fix                 prop_out emit/surf exhaust all\n"
         input_s += "\n"
         input_s += "timestep            %.4e\n" % dt
         input_s += "\n"
