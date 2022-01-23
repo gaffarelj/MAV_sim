@@ -15,16 +15,6 @@ from tudatpy.kernel.astro import time_conversion
 
 import ascent
 
-# Key parameters from requirements
-launch_epoch = time_conversion.julian_day_to_seconds_since_epoch(time_conversion.calendar_date_to_julian_day(datetime(2031, 2, 17)))    # MAV-­LL­-01
-launch_lat, launch_lon = np.deg2rad(18.85), np.deg2rad(77.52)   # MAV­-LL-­03
-launch_h = -2.5e3                                               # MAV­-LL-­04
-launch_mass = 400                                               # MAV-­VM­-03
-launch_angle = np.deg2rad(45)                                   # MAV­-LL-­06
-target_orbit_h = 300e3                                          # MAV­-OSO­-01
-target_orbit_i = np.deg2rad(25)                                 # MAV­-OSO­-03
-max_acceleration = 15 * 9.80665                                 # MAV­-LL-­02
-max_AoA = np.deg2rad(4)                                         # MAV­-LL-­05
 
 MAV_ascent = ascent.MAV_ascent(
     launch_epoch = 0,#time_conversion.julian_day_to_seconds_since_epoch(time_conversion.calendar_date_to_julian_day(datetime(2031, 2, 17)))    # MAV-­LL­-01
@@ -38,7 +28,7 @@ MAV_ascent = ascent.MAV_ascent(
     target_orbit_i = np.deg2rad(25),    # MAV­-OSO­-03
     max_a = 15 * 9.80665,               # MAV­-LL-­02
     max_AoA = np.deg2rad(4),            # MAV­-LL-­05
-    staging_altitude = 250e3
+    staging_altitude = 200e3
 )
 
 # Setup and run simulation for stage 1
