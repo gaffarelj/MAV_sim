@@ -1,0 +1,79 @@
+# SPARTA input file for vehicle MAV_stage_2, for an altitude of 300.0km
+print ""
+print "***** Running SPARTA simulation for MAV_stage_2, at h=300km *****"
+print ""
+seed                12345
+dimension           3
+
+global              gridcut 0.1 comm/sort yes surfmax 10000 splitmax 1000
+
+boundary            o o o
+create_box          -0.8000 0.8000 -0.5000 0.5000 -0.5000 0.5000
+
+create_grid         125 78 78
+
+balance_grid        rcb part
+
+global              nrho 1.5015e+12 fnum 3.1558e+09 vstream -3407.0700 0.0 0.0 temp 179.3820
+
+species             ../atmo.species CO2 N2 Ar CO O O2
+mixture             atmo CO2 frac 0.0065
+mixture             atmo N2 frac 0.0458
+mixture             atmo Ar frac 0.0010
+mixture             atmo CO frac 0.0317
+mixture             atmo O frac 0.9133
+mixture             atmo O2 frac 0.0017
+collide             vss all ../atmo.vss
+
+read_surf           ../data/data.MAV_stage_2 trans 0.3850 0 0
+surf_collide        1 diffuse 293.15 0.0181
+surf_modify         all collide 1
+
+region              vehicle block -0.3860 -0.3840 -0.5000 0.5000 -0.5000 0.5000
+
+fix                 in emit/face atmo xhi zhi zlo yhi ylo
+
+timestep            2.8177e-06
+
+compute             forces surf all all fx fy fz
+fix                 avg ave/surf all 1 83 125 c_forces[*] ave running
+compute             sum_force reduce sum f_avg[*]
+
+compute             n grid all all n
+fix                 n_avg ave/grid all 1 83 125 c_n[*]
+
+compute             nrho grid all all nrho
+fix                 nrho_avg ave/grid all 1 83 125 c_nrho[*]
+
+compute             massrho grid all all massrho
+fix                 massrho_avg ave/grid all 1 83 125 c_massrho[*]
+
+compute             u grid all all u
+fix                 u_avg ave/grid all 1 83 125 c_u[*]
+
+compute             avg_ppc reduce ave f_n_avg
+
+compute             T thermal/grid all all temp
+fix                 T_avg ave/grid all 1 83 125 c_T[*]
+
+compute             knudsen lambda/grid f_nrho_avg f_T_avg CO2 kall
+
+stats               125
+stats_style         step cpu wall np nscoll nexit c_sum_force[*] c_avg_ppc
+
+dump                0 grid all 250 ../results_sparta/MAV_stage_2/vals_300km_0.*.dat id f_n_avg f_nrho_avg f_massrho_avg f_u_avg f_T_avg c_knudsen[*]
+write_grid          ../results_sparta/MAV_stage_2/grid_300km_0.dat
+run                 1000
+
+print "Refinement level 1"
+timestep            2.8444e-06
+adapt_grid          all refine coarsen value c_knudsen[2] 5 50 combine min thresh less more cells 2 2 2
+scale_particles     all 10
+global              fnum 3.1558e+08
+undump              0
+dump                1 grid all 125 ../results_sparta/MAV_stage_2/vals_300km_1.*.dat id f_n_avg f_nrho_avg f_massrho_avg f_u_avg f_T_avg c_knudsen[*]
+balance_grid        rcb part
+
+write_grid          ../results_sparta/MAV_stage_2/grid_300km_1.dat
+run                 500
+

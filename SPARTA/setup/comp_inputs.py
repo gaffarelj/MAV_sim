@@ -9,16 +9,20 @@ import os
 import shutil
 import tudatpy.util as TU
 
+# Define altitudes
+hs = [100, 150, 200, 250, 300]
 
-tot_epochs = [1500, 1500, 1500]             # Number of simulation epochs for each altitude (should be multiple of 1000)
-run_fractions = [15/30, 10/30, 5/30]   # Epochs at which to switch from initial run [0] to refinements [1 to -2] to final refinement and run [-1]
-refinement_factors = [2, 2]              # Factor by which to scale the grid
-refine_region = [False, False]         # When True, only refine the grid in the region where the vehicle is
+tot_epochs = [1500, 1500, 1500, 1500, 1500]   # Number of simulation epochs for each altitude (should be multiple of 1000)
+run_fractions = [20/30, 10/30]   # Epochs at which to switch from initial run [0] to refinements [1 to -2] to final refinement and run [-1]
+refinement_factors = [2]              # Factor by which to scale the grid
+refine_region = [False]         # When True, only refine the grid in the region where the vehicle is
 # Scale the number of particles by these
 particles_scales = {
-    85: [20, 5, 10, 5, 5],
-    115: [500, 5, 10, 5, 5],#[500, 5, 10, 5, 5],
-    150: [1500, 5, 10, 5, 5]
+    100: [100, 10],
+    150: [500, 10],
+    200: [1000, 10],
+    250: [5000, 10],
+    300: [10000, 10],
 }
 # Set whether to use the exhaust plume or not
 use_exhaust = False
@@ -30,28 +34,23 @@ L_s = [0.77]
 L_vehicles = [0.77]
 # List of vehicle (semi-)widths to limit the refinement region
 widths = [0.5]
-# vehicles for which to run what altitude:
-vehicle_run_h = {
-    85: [],
-    115: ["MAV_stage_2"],
-    150: []
-}
+# vehicles for which to run what altitude
+vehicle_run_h = {h: "MAV_stage_2" for h in hs}
 
 # Define conditions at different orbital altitudes
-hs = [85, 115, 150]
-rhos = [1.27915E-06, 2.21588E-08, 1.94535e-10]
-ps = [3.47635E-02, 4.84327E-04, 7.27188E-06]
-Ts = [140.264, 114.185, 172.404]
-Vs = [3510.90, 3495.84, 3475.51]
+rhos = [1.82031e-07, 1.94534e-10, 3.60822e-12, 2.74321e-13, 4.26962e-14]
+ps = [4.58579e-03, 7.27184e-06, 2.05882e-07, 2.59061e-08, 7.73174e-09]
+Ts = [128.643, 172.404, 179.196, 179.369, 179.382]
+Vs = [3503.34, 3478.51, 3454.20, 3430.39, 3407.07]
 fracs = [
-    np.array([95.298, 1.909, 1.960, 0.422, 0.250, 0.162])/100,
-    np.array([87.489, 4.340, 4.041, 2.341, 1.409, 0.380])/100,
-    np.array([65.826, 11.923, 4.910, 7.796, 8.533, 1.012])/100
+    np.array([93.270, 2.445, 2.513, 0.965, 0.607, 0.200])/100,
+    np.array([65.826, 11.923, 4.910, 7.796, 8.533, 1.012])/100,
+    np.array([24.723, 17.401, 2.297, 11.148, 43.375, 1.056])/100,
+    np.array([5.102, 10.644, 0.582, 7.033, 76.132, 0.507])/100,
+    np.array([0.648, 4.581, 0.098, 3.174, 91.333, 0.166])/100
 ]
 
 run_all_cmd = "#!/bin/sh\n"
-run_all_cmd += "module load gnu/7\n"
-run_all_cmd += "module load openmpi\n"
 paraview_surf = ""
 paraview_grid = ""
 for j, s_name in enumerate(vehicle_names):
@@ -86,7 +85,7 @@ for j, s_name in enumerate(vehicle_names):
         # Fraction of each species
         species_frac = fracs[i]
         if round(sum(species_frac), 5) != 1:
-            print("Warning, the sum of the species fraction does not add up to 1.")
+            print("Warning, the sum of the species fraction does not add up to 1 (but to %.5f)..." % round(sum(species_frac), 5))
 
         # Constants
         # Species name, mass, diameter, frontal area
@@ -114,8 +113,8 @@ for j, s_name in enumerate(vehicle_names):
         grid_ps_mfp = lambda_ps / 5                                     # post-shock grid dimension [m] (based on mean free path)
         grid_f_vel = u_s*dt_mfp                                         # grid dimension before shock [m] (based on velocity)
         grid_ps_vel = cr_ps*dt_mfp                                      # post-shock grid dimension [m] (based on velocity)
-        grid_f = max(min(grid_f_mfp, grid_f_vel, L/30), L/250)          # Take minimum on (or L_ref/30, to avoid grid too small, L_ref/250 to grid dimensiavoid initial grid too big)
-        grid_ps = max(min(grid_ps_mfp, grid_ps_vel, L/30), L/250)       # Take minimum grid dimension (or L_ref/30, to avoid grid too small, L_ref/250 to avoid initial grid too big)
+        grid_f = max(min(grid_f_mfp, grid_f_vel, L/50), L/250)          # Take minimum on (or L_ref/50, to avoid grid too small, L_ref/250 to avoid initial grid too big)
+        grid_ps = max(min(grid_ps_mfp, grid_ps_vel, L/50), L/250)       # Take minimum grid dimension (or L_ref/50, to avoid grid too small, L_ref/250 to avoid initial grid too big)
         n_real = (nrho + nrho_ps) / 2 * h_box * l_box * w_box           # real number of particles
         n_x = int(l_box / ((grid_f + grid_ps)/2))                       # number of grid segments along x
         n_y = int(w_box / ((grid_f + grid_ps)/2))                       # number of grid segments along y
@@ -269,7 +268,7 @@ for j, s_name in enumerate(vehicle_names):
             input_s += "run                 %i\n" % run_n
             input_s += "\n"
         
-        run_all_cmd += "mpirun -np 8 spa_ < in.%s_%skm | tee ../results_sparta/%s/stats_%ikm.dat\n" % (s_name, h, s_name, h)
+        run_all_cmd += "mpirun -np 16 spa_ < in.%s_%skm | tee ../results_sparta/%s/stats_%ikm.dat\n" % (s_name, h, s_name, h)
         for i_r in range(len(run_fractions)):
             paraview_grid += "\n"
             paraview_grid += "rm -rf vals_%s_%skm_%i \n" % (s_name, h, i_r)
