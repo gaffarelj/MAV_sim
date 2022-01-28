@@ -10,19 +10,27 @@ import shutil
 import tudatpy.util as TU
 
 # Define altitudes
-hs = [100, 150, 200, 250, 300]
+hs = [100, 125, 150, 175, 200, 225, 250, 275, 300, 350, 400, 450, 500]
 
-tot_epochs = [1500, 1500, 1500, 1500, 1500]   # Number of simulation epochs for each altitude (should be multiple of 1000)
+tot_epochs = [1500] * len(hs)   # Number of simulation epochs for each altitude (should be multiple of 1000)
 run_fractions = [20/30, 10/30]   # Epochs at which to switch from initial run [0] to refinements [1 to -2] to final refinement and run [-1]
 refinement_factors = [2]              # Factor by which to scale the grid
 refine_region = [False]         # When True, only refine the grid in the region where the vehicle is
 # Scale the number of particles by these
 particles_scales = {
-    100: [100, 10],
-    150: [500, 10],
-    200: [1000, 10],
-    250: [5000, 10],
-    300: [10000, 10],
+    100: [1e2, 10],
+    125: [3e2, 10],
+    150: [5e2, 10],
+    175: [1e3, 10],
+    200: [5e3, 10],
+    225: [1e4, 10],
+    250: [5e4, 10],
+    275: [1e5, 10],
+    300: [5e5, 10],
+    350: [1e6, 10],
+    400: [5e6, 10],
+    450: [1e7, 10],
+    500: [5e7, 10]
 }
 # Set whether to use the exhaust plume or not
 use_exhaust = False
@@ -38,16 +46,24 @@ widths = [0.5]
 vehicle_run_h = {h: "MAV_stage_2" for h in hs}
 
 # Define conditions at different orbital altitudes
-rhos = [1.82031e-07, 1.94534e-10, 3.60822e-12, 2.74321e-13, 4.26962e-14]
-ps = [4.58579e-03, 7.27184e-06, 2.05882e-07, 2.59061e-08, 7.73174e-09]
-Ts = [128.643, 172.404, 179.196, 179.369, 179.382]
-Vs = [3503.34, 3478.51, 3454.20, 3430.39, 3407.07]
+rhos = [1.82031e-07, 4.29462e-09, 1.94534e-10, 2.15307e-11, 3.60822e-12, 8.64996e-13, 2.74321e-13, 1.01443e-13, 4.26962e-14, 1.10285e-14, 4.70352e-15, 2.97560e-15, 2.29431e-15]
+ps =   [4.58579e-03, 1.07168e-04, 7.27184e-06, 9.83263e-07, 2.05882e-07, 6.32226e-08, 2.59061e-08, 1.29177e-08, 7.73174e-09, 4.31813e-09, 3.26268e-09, 2.72788e-09, 2.35800e-09]
+Ts =   [128.643,     133.166,     172.404,     178.405,     179.196,     179.330,     179.369,     179.380,     179.382,     179.383,     179.383,     179.382,     179.383]
+Vs =   [3503.34,     3490.86,     3478.51,     3466.29,     3454.20,     3442.23,     3430.39,     3418.67,     3407.07,     3384.21,     3361.81,     3339.85,     3318.31]
 fracs = [
     np.array([93.270, 2.445, 2.513, 0.965, 0.607, 0.200])/100,
+    np.array([81.674, 6.398, 4.972, 3.851, 2.509, 0.596])/100,
     np.array([65.826, 11.923, 4.910, 7.796, 8.533, 1.012])/100,
-    np.array([24.723, 17.401, 2.297, 11.148, 43.375, 1.056])/100,
+    np.array([44.654, 16.782, 3.754, 10.801, 22.822, 1.186])/100,
+    np.array([24.723, 17.401, 2.297, 11.148, 43.375, 1.055])/100,
+    np.array([11.796, 14.477, 1.210, 9.397, 62.345, 0.775])/100,
     np.array([5.102, 10.644, 0.582, 7.033, 76.132, 0.507])/100,
-    np.array([0.648, 4.581, 0.098, 3.174, 91.333, 0.166])/100
+    np.array([1.900, 7.190, 0.249, 4.862, 85.498, 0.301])/100,
+    np.array([0.648, 4.581, 0.098, 3.174, 91.333, 0.166])/100,
+    np.array([0.074, 1.758, 0.015, 1.271, 96.835, 0.047])/100,
+    np.array([0.012, 0.679, 0.003, 0.501, 98.792, 0.014])/100,
+    np.array([0.004, 0.280, 0.001, 0.203, 99.507, 0.005])/100,
+    np.array([0.003, 0.132, 0.001, 0.088, 99.775, 0.002])/100
 ]
 
 run_all_cmd = "#!/bin/sh\n"
@@ -79,13 +95,13 @@ for j, s_name in enumerate(vehicle_names):
         T = Ts[i]       # temperature [K]
         u_s = Vs[i]     # free-stream velocity [m/s]
         L = L_s[j]      # reference length [m] (vehicle width)
-        h_box = 1.0     # box height [m]
-        w_box = 1.0     # box width [m]
-        l_box = 1.6    # box length [m]
+        h_box = 1.25     # box height [m]
+        w_box = 1.25     # box width [m]
+        l_box = 1.75    # box length [m]
         # Fraction of each species
         species_frac = fracs[i]
-        if round(sum(species_frac), 5) != 1:
-            print("Warning, the sum of the species fraction does not add up to 1 (but to %.5f)..." % round(sum(species_frac), 5))
+        if round(sum(species_frac), 4) != 1:
+            print("Warning, the sum of the species fraction does not add up to 1 (but to %.4f)..." % sum(species_frac)), input("Press ENTER to continue...")
 
         # Constants
         # Species name, mass, diameter, frontal area
