@@ -36,10 +36,13 @@ class MAV_thrust:
         return self.Isp
 
     def get_thrust_orientation(self, time):
-        # Set thrust in vertical frame and transpose it
-        thrust_direction_vertical_frame = np.array([[0, np.sin(self.angle), - np.cos(self.angle)]]).T
         # Get aerodynamic angle calculator
         aerodynamic_angle_calculator = self.ascent_model.current_body.flight_conditions.aerodynamic_angle_calculator
+        ### Force thrust parallel to angle of attack
+        #self.angle = aerodynamic_angle_calculator.get_angle(environment.angle_of_attack)
+        ###
+        # Set thrust in vertical frame and transpose it
+        thrust_direction_vertical_frame = np.array([[0, np.sin(self.angle), - np.cos(self.angle)]]).T
         # Retrieve rotation matrix from vertical to inertial frame from the aerodynamic angle calculator
         vertical_to_inertial_frame = aerodynamic_angle_calculator.get_rotation_matrix_between_frames(
             environment.AerodynamicsReferenceFrames.vertical_frame,
