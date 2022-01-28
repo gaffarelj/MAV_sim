@@ -138,6 +138,12 @@ for j, s_name in enumerate(vehicle_names):
         n_cells = n_x * n_y * n_z                                       # number of cells
         n_sim = particles_scale[0] * n_cells                            # number of simulated particles (int factor results from analysis to have 10 ppc)
         f_num = n_real / n_sim                                          # f_num for SPARTA
+
+        # Compute the Mach number
+        N = 6.0221409e+23
+        molar_mass = 8.314 / (weighted_m * N)
+        M = u_s / np.sqrt(1.3 * molar_mass * T)
+        print("     Mach number equal to %.4f" % M)
         
         # Check that dt is small enough given dx and v
         dx = min(l_box/n_x, w_box/n_y, h_box/n_z)
