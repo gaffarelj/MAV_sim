@@ -1,5 +1,9 @@
-from xml.dom import NotFoundErr
 import numpy as np
+import sys
+# Set path to uppermost project level
+sys.path = [p for p in sys.path if p != ""]
+while sys.path[0].split("/")[-1] != "MAV_sim":
+    sys.path.insert(0,"/".join(sys.path[0].split("/")[:-1]))
 
 from tudatpy.kernel import numerical_simulation
 from tudatpy.kernel.astro import element_conversion
@@ -17,13 +21,13 @@ spice_interface.load_standard_kernels()
 class MAV_ascent:
 
     def __init__(self, launch_epoch, launch_lat, launch_lon, launch_h, mass_1, mass_2, \
-        launch_angle, target_orbit_h, target_orbit_i, max_a, max_AoA, staging_altitude):
+        launch_angles, target_orbit_h, target_orbit_i, max_a, max_AoA, staging_altitude):
         self.launch_epoch = launch_epoch
         self.launch_lat, self.launch_lon = launch_lat, launch_lon
         self.launch_h = launch_h
         self.stage_1_wet_mass, self.stage_1_dry_mass = mass_1[0], mass_1[1]
         self.stage_2_wet_mass, self.stage_2_dry_mass = mass_2[0], mass_2[1]
-        self.launch_angle = launch_angle
+        self.launch_angles = launch_angles
         self.target_orbit_h = target_orbit_h
         self.target_orbit_i = target_orbit_i
         self.max_acceleration = max_a
@@ -45,8 +49,8 @@ class MAV_ascent:
         self.current_body = self.bodies.get(self.current_name)
         if stage == 1:
             self.current_body.set_constant_mass(self.stage_1_wet_mass)
-            force_coefficients_files = {i: "data/coefficients/CF%s.dat" % l for i, l in enumerate(["x", "y", "z"])}
-            moment_coefficients_files = {i: "data/coefficients/CM%s.dat" % l for i, l in enumerate(["x", "y", "z"])}
+            force_coefficients_files = {i: sys.path[0] + "/data/coefficients/CF%s.dat" % l for i, l in enumerate(["x", "y", "z"])}
+            moment_coefficients_files = {i: sys.path[0] + "/data/coefficients/CM%s.dat" % l for i, l in enumerate(["x", "y", "z"])}
             coefficient_settings = environment_setup.aerodynamic_coefficients.tabulated_from_files(
                 force_coefficient_files=force_coefficients_files,
                 moment_coefficient_files=moment_coefficients_files,
@@ -65,14 +69,25 @@ class MAV_ascent:
         environment_setup.add_aerodynamic_coefficient_interface(self.bodies, self.current_name, coefficient_settings)
         self.bodies_to_propagate = [self.current_name]
 
-    def create_accelerations(self):
+    def create_accelerations(self, only_thrust_dict=False):
         # Define thrust
         if self.current_stage == 1:
-            thrust = MAV_thrust(self, np.deg2rad(50), 9854, 293)
+            thrust = MAV_thrust(self, self.launch_angles[0], 9750, 293)
         else:
-            thrust = MAV_thrust(self, np.deg2rad(90), 6937, 282)
+            thrust = MAV_thrust(self, self.launch_angles[1], 5000, 282)
         thrust_direction_settings = propagation_setup.thrust.custom_thrust_direction(thrust.get_thrust_orientation)
         thrust_magnitude_settings = propagation_setup.thrust.custom_thrust_magnitude(thrust.get_thrust_magnitude, thrust.get_specific_impulse, thrust.is_thrust_on)
+
+        if only_thrust_dict:
+            accelerations_on_vehicle = {
+                self.current_name: [
+                    propagation_setup.acceleration.thrust_from_direction_and_magnitude(
+                        thrust_direction_settings,
+                        thrust_magnitude_settings
+                    )
+                ]
+            }
+            return accelerations_on_vehicle
 
         # Define accelerations
         accelerations_on_vehicle = {
@@ -101,7 +116,7 @@ class MAV_ascent:
                 latitude=self.launch_lat,
                 longitude=self.launch_lon,
                 speed=1.0,
-                flight_path_angle=self.launch_angle,
+                flight_path_angle=self.launch_angles[0],
                 heading_angle=0
             )
             self.initial_state = environment.transform_to_inertial_orientation(
@@ -112,7 +127,7 @@ class MAV_ascent:
             try:
                 last_state = self.states[-1]
             except AttributeError:
-                raise NotFoundErr("The last states of the first stage could not be found. Please make sure that the simulation has been run for the first stage before attempting to run for the second stage.")
+                raise ValueError("The last states of the first stage could not be found. Please make sure that the simulation has been run for the first stage before attempting to run for the second stage.")
             self.initial_state = last_state[:6]
 
     def create_dependent_variables_to_save(self):
@@ -151,7 +166,7 @@ class MAV_ascent:
             self.combined_termination_settings = propagation_setup.propagator.hybrid_termination(
             [termination_max_altitude_settings, termination_min_altitude_settings], fulfill_single_condition=True)
         else:
-            termination_max_time_settings = propagation_setup.propagator.time_termination(self.initial_epoch + 180*60)
+            termination_max_time_settings = propagation_setup.propagator.time_termination(self.initial_epoch + 200*60)
             self.combined_termination_settings = propagation_setup.propagator.hybrid_termination(
             [termination_max_time_settings, termination_min_altitude_settings], fulfill_single_condition=True)
 
@@ -163,8 +178,8 @@ class MAV_ascent:
             self.bodies_to_propagate,
             self.initial_state,
             self.combined_termination_settings,
-            propagation_setup.propagator.unified_state_model_quaternions,
-            #propagation_setup.propagator.cowell,
+            #propagation_setup.propagator.unified_state_model_quaternions,
+            propagation_setup.propagator.cowell,
             output_variables=self.dependent_variables_to_save
         )
 
@@ -187,7 +202,7 @@ class MAV_ascent:
 
     def create_integrator_settings(self):
         initial_time_step = 1.0
-        minimum_time_step = 0.001
+        minimum_time_step = 0.0001
         maximum_time_step = 500
         tolerance = 1e-14
         self.integrator_settings = propagation_setup.integrator.runge_kutta_variable_step_size(
