@@ -17,18 +17,18 @@ import ascent
 
 
 MAV_ascent = ascent.MAV_ascent(
-    launch_epoch = 0,#time_conversion.julian_day_to_seconds_since_epoch(time_conversion.calendar_date_to_julian_day(datetime(2031, 2, 17)))    # MAV-­LL­-01
-    launch_lat = np.deg2rad(18.85),     # MAV­-LL-­03
-    launch_lon = np.deg2rad(77.52),     # MAV­-LL-­03
+    launch_epoch = 0,#time_conversion.julian_day_to_seconds_since_epoch(time_conversion.calendar_date_to_julian_day(datetime(2031, 2, 17))),    # MAV-­LL­-01
+    launch_lat = 0,#np.deg2rad(18.85),     # MAV­-LL-­03
+    launch_lon = 0,#np.deg2rad(77.52),     # MAV­-LL-­03
     launch_h = -2.5e3,                  # MAV­-LL-­04
     mass_1 = [400, 185],                # MAV-­VM­-03 + LS p.10
-    mass_2 = [100, 45],                 # LS p.10
-    launch_angle = np.deg2rad(45),      # MAV­-LL-­06
+    mass_2 = [90, 40],                 # LS p.10
+    launch_angles = [np.deg2rad(52.5), np.deg2rad(90)], # MAV­-LL-­06 + guesstimate # angle is w.r.t vertical
     target_orbit_h = 300e3,             # MAV­-OSO­-01
     target_orbit_i = np.deg2rad(25),    # MAV­-OSO­-03
     max_a = 15 * 9.80665,               # MAV­-LL-­02
     max_AoA = np.deg2rad(4),            # MAV­-LL-­05
-    staging_altitude = 200e3
+    staging_altitude = 250e3
 )
 
 # Setup and run simulation for stage 1
@@ -73,29 +73,47 @@ import matplotlib.pyplot as plt
 
 idx_crop = np.where(times >= 12)[0][0]
 
-plt.figure(figsize=(10, 6))
-plt.plot(times[:idx_crop], a_pm[:idx_crop], label="SH")
-plt.plot(times[:idx_crop], a_thrust[:idx_crop], label="Thrust")
-plt.plot(times[:idx_crop], a_aero[:idx_crop], label="Aero")
-plt.plot(times[:idx_crop], tot_accs[:idx_crop], label="Total", linestyle="dotted")
-plt.xlabel("Time [min]"), plt.ylabel("Acceleration [m/s$^2$]")
-plt.legend()
-plt.grid(), plt.tight_layout()
+
+
+# plt.figure(figsize=(10, 6))
+# plt.plot(times[:idx_crop], a_pm[:idx_crop], label="SH")
+# plt.plot(times[:idx_crop], a_thrust[:idx_crop], label="Thrust")
+# plt.plot(times[:idx_crop], a_aero[:idx_crop], label="Aero")
+# plt.plot(times[:idx_crop], tot_accs[:idx_crop], label="Total", linestyle="dotted")
+# plt.xlabel("Time [min]"), plt.ylabel("Acceleration [m/s$^2$]")
+# plt.legend()
+# plt.grid(), plt.tight_layout()
 
 plt.figure(figsize=(10, 6))
 plt.plot(times, altitudes/1e3)
 plt.xlabel("Time [min]"), plt.ylabel("Altitude [km]")
 plt.grid(), plt.tight_layout()
 
-plt.figure(figsize=(10, 6))
-plt.plot(times, airspeeds)
-plt.xlabel("Time [min]"), plt.ylabel("Airspeed [m/s]")
-plt.grid(), plt.tight_layout()
+# fig3 = plt.figure(figsize=(7, 6))
+# ax3 = fig3.add_subplot(111, projection="3d")
+# ax3.set_title(f"System state evolution in 3D")
 
-plt.figure(figsize=(10, 6))
-plt.plot(times[:idx_crop], mass[:idx_crop])
-plt.xlabel("Time [min]"), plt.ylabel("Mass [kg]")
-plt.grid(), plt.tight_layout()
+# ax3.plot(X, Y, Z)
+# ax3.scatter(X[0], Y[0], Z[0])
+# ax3.scatter(0, 0, 0)
+
+# xyzlim = np.array([ax3.get_xlim3d(),ax3.get_ylim3d(),ax3.get_zlim3d()]).T
+# XYZlim = [min(xyzlim[0]),max(xyzlim[1])]
+# ax3.set_xlim3d(XYZlim)
+# ax3.set_ylim3d(XYZlim)
+# ax3.set_zlim3d(XYZlim)
+
+# plt.show()
+
+# plt.figure(figsize=(10, 6))
+# plt.plot(times, airspeeds)
+# plt.xlabel("Time [min]"), plt.ylabel("Airspeed [m/s]")
+# plt.grid(), plt.tight_layout()
+
+# plt.figure(figsize=(10, 6))
+# plt.plot(times[:idx_crop], mass[:idx_crop])
+# plt.xlabel("Time [min]"), plt.ylabel("Mass [kg]")
+# plt.grid(), plt.tight_layout()
 
 # plt.figure(figsize=(10, 6))
 # plt.plot(times, force_coeffs[:,0])
@@ -123,8 +141,8 @@ plt.grid(), plt.tight_layout()
 # plt.grid(), plt.tight_layout()
 
 # plt.figure(figsize=(10, 6))
-# plt.plot(np.sqrt(X**2 + Y**2)/1e3, Z/1e3)
-# plt.xlabel("X-Y [km]"), plt.ylabel("Z [km]")
+# plt.plot(np.sqrt((X-X[0])**2 + (Y-Y[0])**2)/1e3, altitudes/1e3)
+# plt.xlabel("X-Y [km]"), plt.ylabel("h [km]")
 # plt.grid(), plt.tight_layout()
 
 plt.show()
