@@ -21,13 +21,14 @@ spice_interface.load_standard_kernels()
 class MAV_ascent:
 
     def __init__(self, launch_epoch, launch_lat, launch_lon, launch_h, mass_1, mass_2, \
-        launch_angles, target_orbit_h, target_orbit_i, max_a, max_AoA, staging_altitude):
+        launch_angles, thrust_magnitudes, target_orbit_h, target_orbit_i, max_a, max_AoA, staging_altitude):
         self.launch_epoch = launch_epoch
         self.launch_lat, self.launch_lon = launch_lat, launch_lon
         self.launch_h = launch_h
         self.stage_1_wet_mass, self.stage_1_dry_mass = mass_1[0], mass_1[1]
         self.stage_2_wet_mass, self.stage_2_dry_mass = mass_2[0], mass_2[1]
         self.launch_angles = launch_angles
+        self.thrust_magnitudes = thrust_magnitudes
         self.target_orbit_h = target_orbit_h
         self.target_orbit_i = target_orbit_i
         self.max_acceleration = max_a
@@ -72,9 +73,10 @@ class MAV_ascent:
     def create_accelerations(self, only_thrust_dict=False):
         # Define thrust
         if self.current_stage == 1:
-            thrust = MAV_thrust(self, self.launch_angles[0], 9750, 293)
+            thrust = MAV_thrust(self, self.launch_angles[0], self.thrust_magnitudes[0], 293)
         else:
-            thrust = MAV_thrust(self, self.launch_angles[1], 5000, 282)
+            thrust = MAV_thrust(self, self.launch_angles[1], self.thrust_magnitudes[1], 282)
+        #thrust_direction_settings = propagation_setup.thrust.custom_thrust_orientation(thrust.get_thrust_orientation)
         thrust_direction_settings = propagation_setup.thrust.custom_thrust_direction(thrust.get_thrust_orientation)
         thrust_magnitude_settings = propagation_setup.thrust.custom_thrust_magnitude(thrust.get_thrust_magnitude, thrust.get_specific_impulse, thrust.is_thrust_on)
 
@@ -178,11 +180,11 @@ class MAV_ascent:
             self.bodies_to_propagate,
             self.initial_state,
             self.combined_termination_settings,
-            #propagation_setup.propagator.unified_state_model_quaternions,
-            propagation_setup.propagator.cowell,
+            propagation_setup.propagator.gauss_keplerian,
+            #propagation_setup.propagator.cowell,
             output_variables=self.dependent_variables_to_save
         )
-
+        
         mass_rate_settings = {self.current_name:[propagation_setup.mass_rate.from_thrust()]}
         mass_rate_models = propagation_setup.create_mass_rate_models(
             self.bodies,
@@ -200,15 +202,23 @@ class MAV_ascent:
             self.combined_termination_settings,
             self.dependent_variables_to_save)
 
-    def create_integrator_settings(self):
-        initial_time_step = 1.0
-        minimum_time_step = 0.0001
-        maximum_time_step = 500
-        tolerance = 1e-14
+    def create_integrator_settings(self, fixed_step=None):
+        if fixed_step is not None:
+            initial_time_step = fixed_step
+            minimum_time_step = fixed_step
+            maximum_time_step = fixed_step
+            tolerance = 1
+            coefficients = propagation_setup.integrator.rkf_45
+        else:
+            initial_time_step = 1.0
+            minimum_time_step = 0.0001
+            maximum_time_step = 500
+            tolerance = 1e-14
+            coefficients = propagation_setup.integrator.rkf_78
         self.integrator_settings = propagation_setup.integrator.runge_kutta_variable_step_size(
             self.initial_epoch,
             initial_time_step,
-            propagation_setup.integrator.rkf_78,
+            coefficients,
             minimum_time_step,
             maximum_time_step,
             relative_error_tolerance=tolerance,

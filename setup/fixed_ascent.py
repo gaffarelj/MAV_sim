@@ -18,17 +18,18 @@ import ascent
 
 MAV_ascent = ascent.MAV_ascent(
     launch_epoch = 0,#time_conversion.julian_day_to_seconds_since_epoch(time_conversion.calendar_date_to_julian_day(datetime(2031, 2, 17))),    # MAV-­LL­-01
-    launch_lat = 0,#np.deg2rad(18.85),     # MAV­-LL-­03
-    launch_lon = 0,#np.deg2rad(77.52),     # MAV­-LL-­03
+    launch_lat = 0*np.deg2rad(18.85),     # MAV­-LL-­03
+    launch_lon = 0*np.deg2rad(77.52),     # MAV­-LL-­03
     launch_h = -2.5e3,                  # MAV­-LL-­04
-    mass_1 = [400, 185],                # MAV-­VM­-03 + LS p.10
-    mass_2 = [90, 40],                 # LS p.10
-    launch_angles = [np.deg2rad(52.5), np.deg2rad(90)], # MAV­-LL-­06 + guesstimate # angle is w.r.t vertical
+    mass_1 = [370, 185],                # MAV-­VM­-03 + LS p.10
+    mass_2 = [80, 40],                  # LS p.10
+    launch_angles = [np.deg2rad(60), np.deg2rad(90)], # MAV­-LL-­06 + guesstimate # angle is w.r.t vertical
+    thrust_magnitudes = [9750, 6750],   # adapted from LS p.10
     target_orbit_h = 300e3,             # MAV­-OSO­-01
     target_orbit_i = np.deg2rad(25),    # MAV­-OSO­-03
     max_a = 15 * 9.80665,               # MAV­-LL-­02
     max_AoA = np.deg2rad(4),            # MAV­-LL-­05
-    staging_altitude = 250e3
+    staging_altitude = 137.5e3
 )
 
 # Setup and run simulation for stage 1
@@ -41,11 +42,11 @@ for stage in [1, 2]:
     MAV_ascent.create_dependent_variables_to_save()
     MAV_ascent.create_termination_settings()
     MAV_ascent.create_propagator_settings()
-    MAV_ascent.create_integrator_settings()
+    MAV_ascent.create_integrator_settings(fixed_step=0.1)
     times, states, dep_vars = MAV_ascent.run_simulation()
     stage_res.append([times, states, dep_vars])
     if stage==1:
-        print("Altitude at second stage start:", dep_vars[-1,1])
+        print("Altitude at second stage start of %.4f km..." % (dep_vars[-1,1]/1e3))
 
 # Combine results from both propagations
 times = np.concatenate((stage_res[0][0], stage_res[1][0]))

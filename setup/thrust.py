@@ -50,5 +50,8 @@ class MAV_thrust:
         # Compute the thrust in the inertial frame
         thrust_inertial_frame = np.dot(vertical_to_inertial_frame,
                                     thrust_direction_vertical_frame)
-
+                                    
+        # rot_matrix = np.matrix(np.identity(6))
+        # np.fill_diagonal(rot_matrix, thrust_inertial_frame)
+        # return rot_matrix
         return thrust_inertial_frame
