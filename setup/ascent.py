@@ -132,24 +132,27 @@ class MAV_ascent:
                 raise ValueError("The last states of the first stage could not be found. Please make sure that the simulation has been run for the first stage before attempting to run for the second stage.")
             self.initial_state = last_state[:6]
 
-    def create_dependent_variables_to_save(self):
-        self.dependent_variables_to_save = [
-            propagation_setup.dependent_variable.flight_path_angle(self.current_name, "Mars"),
-            propagation_setup.dependent_variable.altitude(self.current_name, "Mars"),
-            propagation_setup.dependent_variable.aerodynamic_force_coefficients(self.current_name),
-            propagation_setup.dependent_variable.airspeed(self.current_name, "Mars"),
-            propagation_setup.dependent_variable.total_acceleration_norm(self.current_name),
-            propagation_setup.dependent_variable.mach_number(self.current_name, "Mars"),
-            propagation_setup.dependent_variable.body_mass(self.current_name),
-            propagation_setup.dependent_variable.angle_of_attack(self.current_name, "Mars"),
-            propagation_setup.dependent_variable.relative_position(self.current_name, "Mars"),
-            propagation_setup.dependent_variable.single_acceleration_norm(
-                propagation_setup.acceleration.spherical_harmonic_gravity_type, self.current_name, "Mars"),
-            propagation_setup.dependent_variable.single_acceleration_norm(
-                propagation_setup.acceleration.thrust_acceleration_type, self.current_name, self.current_name),
-            propagation_setup.dependent_variable.single_acceleration_norm(
-                propagation_setup.acceleration.aerodynamic_type, self.current_name, "Mars")
-        ]
+    def create_dependent_variables_to_save(self, only_a=None):
+        if only_a is not None:
+            self.dependent_variables_to_save = []
+        else:
+            self.dependent_variables_to_save = [
+                propagation_setup.dependent_variable.flight_path_angle(self.current_name, "Mars"),
+                propagation_setup.dependent_variable.altitude(self.current_name, "Mars"),
+                propagation_setup.dependent_variable.aerodynamic_force_coefficients(self.current_name),
+                propagation_setup.dependent_variable.airspeed(self.current_name, "Mars"),
+                propagation_setup.dependent_variable.total_acceleration_norm(self.current_name),
+                propagation_setup.dependent_variable.mach_number(self.current_name, "Mars"),
+                propagation_setup.dependent_variable.body_mass(self.current_name),
+                propagation_setup.dependent_variable.angle_of_attack(self.current_name, "Mars"),
+                propagation_setup.dependent_variable.relative_position(self.current_name, "Mars"),
+                propagation_setup.dependent_variable.single_acceleration_norm(
+                    propagation_setup.acceleration.spherical_harmonic_gravity_type, self.current_name, "Mars"),
+                propagation_setup.dependent_variable.single_acceleration_norm(
+                    propagation_setup.acceleration.thrust_acceleration_type, self.current_name, self.current_name),
+                propagation_setup.dependent_variable.single_acceleration_norm(
+                    propagation_setup.acceleration.aerodynamic_type, self.current_name, "Mars")
+            ]
 
     def create_termination_settings(self):
         termination_min_altitude_settings = propagation_setup.propagator.dependent_variable_termination(
@@ -181,7 +184,6 @@ class MAV_ascent:
             self.initial_state,
             self.combined_termination_settings,
             propagation_setup.propagator.gauss_keplerian,
-            #propagation_setup.propagator.cowell,
             output_variables=self.dependent_variables_to_save
         )
         
@@ -224,14 +226,17 @@ class MAV_ascent:
             relative_error_tolerance=tolerance,
             absolute_error_tolerance=tolerance)
 
-    def run_simulation(self):
+    def run_simulation(self, return_raw=False):
         dynamics_simulator = numerical_simulation.SingleArcSimulator(
             self.bodies, self.integrator_settings, self.propagator_settings, print_dependent_variable_data=False
         )
 
-        states = result2array(dynamics_simulator.state_history)
-        dep_vars = result2array(dynamics_simulator.dependent_variable_history)
+        raw_states, raw_dep_vars = dynamics_simulator.state_history, dynamics_simulator.dependent_variable_history
+        states = result2array(raw_states)
+        dep_vars = result2array(raw_dep_vars)
         self.times = dep_vars[:,0]
         self.states = states[:,1:]
         self.dep_vars = dep_vars[:,1:]
+        if return_raw:
+            return raw_states, raw_dep_vars
         return self.times, self.states, self.dep_vars
