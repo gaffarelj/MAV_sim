@@ -1,46 +1,100 @@
 import numpy as np
 from scipy.optimize import fsolve
 
-
-def solve_p_c(p_c):
-    # Solve equation for the chamber pressure
-    return (c_real * (rho_p - (p_c*M/R_A/T_c) ) * a * S / A_t)**(1/(1-n)) - p_c
-
-def solve_p_e(p_e):
-    # Solve equation for the exhaust pressure
-    return Gamma / np.sqrt(2*gamma/(gamma-1) * (p_e/p_c)**(2/gamma) * (1 - (p_e/p_c)**((gamma-1)/gamma))) - A_e/A_t
+import sys
+# Set path to uppermost project level
+sys.path = [p for p in sys.path if p != ""]
+while sys.path[0].split("/")[-1] != "MAV_sim":
+    sys.path.insert(0,"/".join(sys.path[0].split("/")[:-1]))
 
 
-# Given values
-gamma = 1.19    # [-] specific heat ratio
-a = 0.004       # [-] burning rate coefficient
-n = 0.3         # [-] burning rate exponent
-rho_p = 1800    # [kg/m3] propellant density
-A_t = 2e-4      # [m2] throat area
-A_e = 4e-3      # [m2] exhaust area
-M = 0.031       # [kg/mol] molar mass
-R_A = 8.314     # [J/mol/K] gas constant
-eta_c = 0.93    # [-] combustion efficiency
-T_c = 3400      # [K] combustion temperature
-p_a = 1e5       # [Pa] ambient pressure
+class thrust:
 
-dt = 0.001  # [s] time step
-S = 2       # [m2] burning surface
+    def __init__(self, geometry_model, rho_p=1800, A_t=0.0019635, A_e=0.1452):
+        self.geometry_model = geometry_model
+        self.gamma = 1.19   # [-] specific heat ratio
+        self.a = 0.004      # [-] burning rate coefficient
+        self.n = 0.3        # [-] burning rate exponent
+        self.rho_p = rho_p  # [kg/m3] propellant density
+        self.A_t = A_t      # [m2] throat area
+        self.A_e = A_e      # [m2] exhaust area
+        self.M = 0.031      # [kg/mol] molar mass
+        self.R_A = 8.314    # [J/mol/K] gas constant
+        self.eta_c = 0.93   # [-] combustion efficiency
+        self.T_c = 3400     # [K] combustion temperature
+        self.p_a = 650      # [Pa] ambient pressure
+        self.last_t = None  # [s] last function call time
 
-# Initial assumptions
-dS = 0.5    # [m2] difference of surface burned between t_i and t_i-1
-r = 0.001   # [m/s] initial regression rate, close to 0
+        # Compute invariables
+        self.Gamma = np.sqrt(self.gamma) * (2/(self.gamma+1))**((self.gamma+1)/(2*(self.gamma-1)))  # [-] Vandenkerckhove function
+        self.c_ideal = np.sqrt(self.R_A/self.M*self.T_c)/self.Gamma                                 # [m/s] ideal characteristic velocity
+        self.c_real = self.eta_c * self.c_ideal                                                     # [m/s] real characteristic velocity
 
-# Compute invariables
-Gamma = np.sqrt(gamma) * (2/(gamma+1))**((gamma+1)/(2*(gamma-1)))   # [-] Vandenkerckhove function
-c_ideal = np.sqrt(R_A/M*T_c)/Gamma                                  # [m/s] ideal characteristic velocity
-c_real = eta_c * c_ideal                                            # [m/s] real characteristic velocity
+        # Initial assumptions
+        self.r = 1e-5       # [m/s] initial regression rate, close to 0
+        self.b = 0          # [m] burnt thickness
+        self.S = 0          # [m2] burning surface
 
-# Compute values at this time step
-m_dot = dS * r * rho_p                              # [kg/s] mass flow
-p_c = fsolve(solve_p_c, 1e5)[0]                     # [Pa] combustion chamber pressure
-p_e = fsolve(solve_p_e, p_c/100)[0]                 # [Pa] exhaust pressure
-V_e = np.sqrt(2*gamma/(gamma-1) * R_A/M * T_c * (1-(p_e/p_c)**((gamma-1)/gamma)))   # [m/s] exhaust velocity
-F_T = m_dot * V_e + (p_e - p_a) * A_e               # [N] thrust
+    def solve_p_c(self, p_c):
+        # Solve equation for the chamber pressure
+        rho_c = (p_c*self.M/self.R_A/self.T_c)  # [kg/m3] chamber density
+        return (self.c_real * (self.rho_p - rho_c) * self.a * self.S / self.A_t / 1e6)**(1/(1-self.n)) * 1e6 - p_c
 
-print(F_T)
+    def solve_p_e(self, p_e):
+        # Solve equation for the exhaust pressure
+        return self.Gamma / np.sqrt(2*self.gamma/(self.gamma-1) * (p_e/self.p_c)**(2/self.gamma) * (1 - (p_e/self.p_c)**((self.gamma-1)/self.gamma))) - self.A_e/self.A_t
+
+    def magnitude(self, time):
+        # Compute the current timestep
+        if self.last_t is None:
+            dt = 1e-3
+        else:
+            dt = time - self.last_t
+        self.last_t = time
+        self.b = self.b + self.r * dt
+
+        # Get the current burning surface
+        try:
+            S = self.geometry_model.burning_S(self.b)
+        # Return 0 if the burn thickness is too high
+        except ValueError:
+            return 0
+
+        # Compute the change in burning surface
+        dS = max(S - self.S, 0)
+        self.S = S
+
+        # Compute propulsion characteristics at this time step
+        self.m_dot = dS * self.r * self.rho_p                                   # [kg/s] mass flow
+        self.p_c = fsolve(self.solve_p_c, 1e5)[0]                               # [Pa] combustion chamber pressure
+        self.p_e = fsolve(self.solve_p_e, self.p_c/1000)[0]                     # [Pa] exhaust pressure
+        self.V_e = np.sqrt(2*self.gamma/(self.gamma-1) * self.R_A/self.M * self.T_c * (1-(self.p_e/self.p_c)**((self.gamma-1)/self.gamma)))   # [m/s] exhaust velocity
+        self.F_T = self.m_dot * self.V_e + (self.p_e - self.p_a) * self.A_e     # [N] thrust
+
+        # Update the regression rate
+        self.r = self.a * (self.p_c/1e6) ** self.n    # [m/s]
+
+        # Return the thrust
+        return self.F_T
+
+# from thrust.models import tubular
+# # Define the geometry
+# R_o = 0.55
+# R_i = 0.1
+# L = 1.2
+# tubular_test = tubular.tubular_SRM(R_o, R_i, L)
+
+# SRM_thrust = thrust(tubular_test)
+
+# times = np.arange(0, 60, 0.01)
+# magnitudes = []
+# for time in times:
+#     F_T = SRM_thrust.magnitude(time)
+#     magnitudes.append(F_T)
+
+
+# plt.plot(times, np.array(magnitudes)/1e3)
+# plt.xlabel("Time [s]"), plt.ylabel("Thrust [kN]")
+# plt.grid()
+# plt.tight_layout
+# plt.show()
