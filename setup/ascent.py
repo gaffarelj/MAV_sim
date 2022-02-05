@@ -1,4 +1,5 @@
 import numpy as np
+from scipy import interpolate
 import sys
 # Set path to uppermost project level
 sys.path = [p for p in sys.path if p != ""]
@@ -63,9 +64,16 @@ class MAV_ascent:
             )
         else:
             self.current_body.set_constant_mass(self.stage_2_wet_mass)
-            coefficient_settings = environment_setup.aerodynamic_coefficients.constant(
-                0.144,
-                constant_force_coefficient=[1.5, 0, 0.3]
+            CDs = [1.59860, 1.77670, 1.75737, 1.74900, 1.74924, 1.70594, 1.69850, 1.71255, 1.68698, 1.67177, 1.67533, 1.68058, 1.67640]
+            hs =   np.array([100, 125, 150, 175, 200, 225, 250, 275, 300, 350, 400, 450, 500])*1e3
+            cs = interpolate.interp1d(hs, CDs, kind="quadratic", bounds_error=False, fill_value="extrapolate")
+            def get_CD(dep_vars):
+                h = dep_vars[0]
+                return [cs(h), 0, 0]
+            coefficient_settings = environment_setup.aerodynamic_coefficients.custom(
+                get_CD,
+                reference_area=0.144,
+                independent_variable_names=[environment.AerodynamicCoefficientsIndependentVariables.altitude_dependent]
             )
         environment_setup.add_aerodynamic_coefficient_interface(self.bodies, self.current_name, coefficient_settings)
         self.bodies_to_propagate = [self.current_name]
@@ -100,7 +108,7 @@ class MAV_ascent:
                 )
             ],
             "Mars": [
-                propagation_setup.acceleration.spherical_harmonic_gravity(8, 8),
+                propagation_setup.acceleration.spherical_harmonic_gravity(4, 4),
                 propagation_setup.acceleration.aerodynamic()
             ]
         }
@@ -132,10 +140,8 @@ class MAV_ascent:
                 raise ValueError("The last states of the first stage could not be found. Please make sure that the simulation has been run for the first stage before attempting to run for the second stage.")
             self.initial_state = last_state[:6]
 
-    def create_dependent_variables_to_save(self, only_a=None):
-        if only_a is not None:
-            self.dependent_variables_to_save = []
-        else:
+    def create_dependent_variables_to_save(self, default=True):
+        if default:
             self.dependent_variables_to_save = [
                 propagation_setup.dependent_variable.flight_path_angle(self.current_name, "Mars"),
                 propagation_setup.dependent_variable.altitude(self.current_name, "Mars"),
@@ -153,8 +159,10 @@ class MAV_ascent:
                 propagation_setup.dependent_variable.single_acceleration_norm(
                     propagation_setup.acceleration.aerodynamic_type, self.current_name, "Mars")
             ]
+        else:
+            self.dependent_variables_to_save = []
 
-    def create_termination_settings(self):
+    def create_termination_settings(self, end_time=200*60):
         termination_min_altitude_settings = propagation_setup.propagator.dependent_variable_termination(
             dependent_variable_settings=propagation_setup.dependent_variable.altitude(self.current_name, "Mars"),
             limit_value=-10e3,
@@ -171,7 +179,7 @@ class MAV_ascent:
             self.combined_termination_settings = propagation_setup.propagator.hybrid_termination(
             [termination_max_altitude_settings, termination_min_altitude_settings], fulfill_single_condition=True)
         else:
-            termination_max_time_settings = propagation_setup.propagator.time_termination(self.initial_epoch + 200*60)
+            termination_max_time_settings = propagation_setup.propagator.time_termination(self.initial_epoch + end_time)
             self.combined_termination_settings = propagation_setup.propagator.hybrid_termination(
             [termination_max_time_settings, termination_min_altitude_settings], fulfill_single_condition=True)
 
@@ -183,7 +191,7 @@ class MAV_ascent:
             self.bodies_to_propagate,
             self.initial_state,
             self.combined_termination_settings,
-            propagation_setup.propagator.gauss_keplerian,
+            propagation_setup.propagator.cowell,
             output_variables=self.dependent_variables_to_save
         )
         
@@ -210,7 +218,7 @@ class MAV_ascent:
             minimum_time_step = fixed_step
             maximum_time_step = fixed_step
             tolerance = 1
-            coefficients = propagation_setup.integrator.rkf_45
+            coefficients = propagation_setup.integrator.rkf_78
         else:
             initial_time_step = 1.0
             minimum_time_step = 0.0001
@@ -226,7 +234,7 @@ class MAV_ascent:
             relative_error_tolerance=tolerance,
             absolute_error_tolerance=tolerance)
 
-    def run_simulation(self, return_raw=False):
+    def run_simulation(self, return_raw=False, return_count=False):
         dynamics_simulator = numerical_simulation.SingleArcSimulator(
             self.bodies, self.integrator_settings, self.propagator_settings, print_dependent_variable_data=False
         )
@@ -237,6 +245,12 @@ class MAV_ascent:
         self.times = dep_vars[:,0]
         self.states = states[:,1:]
         self.dep_vars = dep_vars[:,1:]
+        ret  = None
         if return_raw:
-            return raw_states, raw_dep_vars
-        return self.times, self.states, self.dep_vars
+            ret = raw_states, raw_dep_vars
+        else:
+            ret = self.times, self.states, self.dep_vars
+        if return_count:
+            f_evals = list(dynamics_simulator.cumulative_number_of_function_evaluations.values())[-1]
+            return tuple((*ret, f_evals))
+        return ret
