@@ -10,7 +10,7 @@ from tudatpy.kernel import numerical_simulation
 from tudatpy.kernel.astro import element_conversion
 from tudatpy.kernel.interface import spice_interface
 from tudatpy.kernel.numerical_simulation import environment, environment_setup
-from tudatpy.kernel.numerical_simulation import propagation_setup
+from tudatpy.kernel.numerical_simulation import propagation, propagation_setup
 from tudatpy.util import result2array
 from tudatpy.kernel.math import root_finders
 
@@ -18,6 +18,16 @@ from thrust import MAV_thrust
 
 # Load the SPICE kernel
 spice_interface.load_standard_kernels()
+
+class FakeAeroGuidance(propagation.AerodynamicGuidance):
+
+    def __init__(self):
+        # Call the base class constructor
+        propagation.AerodynamicGuidance.__init__(self)
+
+    def updateGuidance(self, current_time):
+        # Update angle of attack
+        self.angle_of_attack = np.deg2rad(1.5) * np.sin(current_time*np.pi/750)
 
 class MAV_ascent:
 

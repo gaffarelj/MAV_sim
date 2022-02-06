@@ -17,20 +17,23 @@ import ascent
 
 
 MAV_ascent = ascent.MAV_ascent(
-    launch_epoch = 0,#time_conversion.julian_day_to_seconds_since_epoch(time_conversion.calendar_date_to_julian_day(datetime(2031, 2, 17))),    # MAV-­LL­-01
-    launch_lat = 0*np.deg2rad(18.85),     # MAV­-LL-­03
-    launch_lon = 0*np.deg2rad(77.52),     # MAV­-LL-­03
+    launch_epoch = time_conversion.julian_day_to_seconds_since_epoch(time_conversion.calendar_date_to_julian_day(datetime(2031, 2, 17))),    # MAV-­LL­-01
+    launch_lat = np.deg2rad(18.85),     # MAV­-LL-­03
+    launch_lon = np.deg2rad(77.52),     # MAV­-LL-­03
     launch_h = -2.5e3,                  # MAV­-LL-­04
     mass_1 = [370, 185],                # MAV-­VM­-03 + LS p.10
     mass_2 = [80, 40],                  # LS p.10
-    launch_angles = [np.deg2rad(60), np.deg2rad(90)], # MAV­-LL-­06 + guesstimate # angle is w.r.t vertical
+    launch_angles = [np.deg2rad(45), np.deg2rad(90)], # MAV­-LL-­06 + guesstimate # angle is w.r.t vertical
     thrust_magnitudes = [9750, 6750],   # adapted from LS p.10
     target_orbit_h = 300e3,             # MAV­-OSO­-01
     target_orbit_i = np.deg2rad(25),    # MAV­-OSO­-03
     max_a = 15 * 9.80665,               # MAV­-LL-­02
     max_AoA = np.deg2rad(4),            # MAV­-LL-­05
-    staging_altitude = 137.5e3
+    staging_altitude = 280e3
 )
+
+from tudatpy.kernel.numerical_simulation import environment_setup
+
 
 # Setup and run simulation for stage 1
 stage_res = []
@@ -38,20 +41,31 @@ for stage in [1, 2]:
     print("Running the simulation for stage %i" % stage)
     MAV_ascent.create_bodies(stage=stage)
     MAV_ascent.create_accelerations()
+    guidance_object = ascent.FakeAeroGuidance()
+    environment_setup.set_aerodynamic_guidance(guidance_object, MAV_ascent.current_body, silence_warnings=True)
     MAV_ascent.create_initial_state()
     MAV_ascent.create_dependent_variables_to_save()
-    MAV_ascent.create_termination_settings()
+    MAV_ascent.create_termination_settings(end_time=125*60)
     MAV_ascent.create_propagator_settings()
     MAV_ascent.create_integrator_settings(fixed_step=0.1)
     times, states, dep_vars = MAV_ascent.run_simulation()
     stage_res.append([times, states, dep_vars])
     if stage==1:
-        print("Altitude at second stage start of %.4f km..." % (dep_vars[-1,1]/1e3))
+        final_h = dep_vars[-1,1]
+        print("Altitude at second stage start of %.4f km..." % (final_h/1e3))
+        if final_h < 0:
+            break
 
-# Combine results from both propagations
-times = np.concatenate((stage_res[0][0], stage_res[1][0]))
-states = np.concatenate((stage_res[0][1], stage_res[1][1]))
-dep_vars = np.concatenate((stage_res[0][2], stage_res[1][2]))
+if final_h < 0:
+    # Extract results from first propagation
+    times = stage_res[0][0]
+    states = stage_res[0][1]
+    dep_vars = stage_res[0][2]
+else:
+    # Combine results from both propagations
+    times = np.concatenate((stage_res[0][0], stage_res[1][0]))
+    states = np.concatenate((stage_res[0][1], stage_res[1][1]))
+    dep_vars = np.concatenate((stage_res[0][2], stage_res[1][2]))
 
 times = (times - times[0])/60
 
@@ -72,18 +86,19 @@ X, Y, Z = dep_vars[:,10], dep_vars[:,11], dep_vars[:,12]
 
 import matplotlib.pyplot as plt
 
-idx_crop = np.where(times >= 12)[0][0]
+if final_h < 0:
+    idx_crop = -1
+else:
+    idx_crop = np.where(times >= 12)[0][0]
 
-
-
-# plt.figure(figsize=(10, 6))
-# plt.plot(times[:idx_crop], a_pm[:idx_crop], label="SH")
-# plt.plot(times[:idx_crop], a_thrust[:idx_crop], label="Thrust")
-# plt.plot(times[:idx_crop], a_aero[:idx_crop], label="Aero")
-# plt.plot(times[:idx_crop], tot_accs[:idx_crop], label="Total", linestyle="dotted")
-# plt.xlabel("Time [min]"), plt.ylabel("Acceleration [m/s$^2$]")
-# plt.legend()
-# plt.grid(), plt.tight_layout()
+plt.figure(figsize=(10, 6))
+plt.plot(times[:idx_crop], a_pm[:idx_crop], label="SH")
+plt.plot(times[:idx_crop], a_thrust[:idx_crop], label="Thrust")
+plt.plot(times[:idx_crop], a_aero[:idx_crop], label="Aero")
+plt.plot(times[:idx_crop], tot_accs[:idx_crop], label="Total", linestyle="dotted")
+plt.xlabel("Time [min]"), plt.ylabel("Acceleration [m/s$^2$]")
+plt.legend()
+plt.grid(), plt.tight_layout()
 
 plt.figure(figsize=(10, 6))
 plt.plot(times, altitudes/1e3)
@@ -106,15 +121,15 @@ plt.grid(), plt.tight_layout()
 
 # plt.show()
 
-# plt.figure(figsize=(10, 6))
-# plt.plot(times, airspeeds)
-# plt.xlabel("Time [min]"), plt.ylabel("Airspeed [m/s]")
-# plt.grid(), plt.tight_layout()
+plt.figure(figsize=(10, 6))
+plt.plot(times, airspeeds)
+plt.xlabel("Time [min]"), plt.ylabel("Airspeed [m/s]")
+plt.grid(), plt.tight_layout()
 
-# plt.figure(figsize=(10, 6))
-# plt.plot(times[:idx_crop], mass[:idx_crop])
-# plt.xlabel("Time [min]"), plt.ylabel("Mass [kg]")
-# plt.grid(), plt.tight_layout()
+plt.figure(figsize=(10, 6))
+plt.plot(times[:idx_crop], mass[:idx_crop])
+plt.xlabel("Time [min]"), plt.ylabel("Mass [kg]")
+plt.grid(), plt.tight_layout()
 
 # plt.figure(figsize=(10, 6))
 # plt.plot(times, force_coeffs[:,0])
@@ -136,10 +151,10 @@ plt.grid(), plt.tight_layout()
 # plt.xlabel("Time [min]"), plt.ylabel("Flight path angle [deg]")
 # plt.grid(), plt.tight_layout()
 
-# plt.figure(figsize=(10, 6))
-# plt.plot(times, angle_of_attacks)
-# plt.xlabel("Time [min]"), plt.ylabel("Angle of attack [deg]")
-# plt.grid(), plt.tight_layout()
+plt.figure(figsize=(10, 6))
+plt.plot(times, angle_of_attacks)
+plt.xlabel("Time [min]"), plt.ylabel("Angle of attack [deg]")
+plt.grid(), plt.tight_layout()
 
 # plt.figure(figsize=(10, 6))
 # plt.plot(np.sqrt((X-X[0])**2 + (Y-Y[0])**2)/1e3, altitudes/1e3)
