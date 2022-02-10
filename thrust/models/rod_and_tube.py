@@ -73,3 +73,8 @@ class rod_and_tube_SRM:
         plt.tight_layout()
         # Return the axis used
         return ax
+
+    def __str__(self):
+        return """Rod and tube SRM geometry with
+        $L = %.3f$ [m], $R_o = %.3f$ [m], $R_mid = %.3f$ [m], $R_i = %i$ [m]""" \
+        % (self.L, self.R_o, self.R_mid, self.R_i)

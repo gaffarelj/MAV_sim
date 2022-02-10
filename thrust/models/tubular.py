@@ -62,3 +62,8 @@ class tubular_SRM:
         plt.tight_layout()
         # Return the axis used
         return ax
+
+    def __str__(self):
+        return """Tubular SRM geometry with
+        $L = %.3f$ [m], $R_o = %.3f$ [m], $R_i = %i$ [m]""" \
+        % (self.L, self.R_o, self.R_i)

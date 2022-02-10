@@ -186,3 +186,8 @@ class anchor_SRM:
         plt.tight_layout()
         # Return the axis used
         return ax
+
+    def __str__(self):
+        return """Anchor SRM geometry with
+        $L = %.3f$ [m], $R_o = %.3f$ [m], $R_i = %.3f$ [m], $N_a = %i$ [-], $w = %.3f$ [m], $r_f = %.3f$ [m], $\delta_s = %.3f$ [m]""" \
+        % (self.L, self.R_o, self.R_i, self.N_a, self.w, self.r_f, self.delta_s)

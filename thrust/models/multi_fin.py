@@ -106,3 +106,8 @@ class multi_fin_SRM:
         plt.tight_layout()
         # Return the axis used
         return ax
+
+    def __str__(self):
+        return """Multi-fin SRM geometry with
+        $L = %.3f$ [m], $R_o = %.3f$ [m], $R_i = %.3f$ [m], $N_f = %i$ [-], $w_f = %.3f$ [m], $L_f = %.3f$ [m]""" \
+        % (self.L, self.R_o, self.R_i, self.N_f, self.w_f, self.L_f)

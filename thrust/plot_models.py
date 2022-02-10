@@ -13,7 +13,6 @@ from scipy import interpolate
 # Import solid thrust model
 from thrust import solid_thrust as ST
 
-# TODO Add main title (SRM geometry parameters)
 # TODO Change burning color as a function of p_c
 
 # Specify which geometry to test
@@ -61,6 +60,8 @@ def plot_geometry_and_thrust(save_path, b_s, burn_times, magnitudes, SRM_geometr
         ax2.set_xlabel("Time [s]"), ax2.set_ylabel("Thrust [kN]")
         ax2.grid()
         ax2.set_title("$t = %.3f$ [s]" % burn_times[i])
+        # Add a global figure title
+        fig.suptitle(str(SRM_geometry))
         fig.tight_layout()
         # Save the figure
         plt.savefig(save_path.replace(".", "-") + "%.4f.png" % burn_times[i])
@@ -68,10 +69,10 @@ def plot_geometry_and_thrust(save_path, b_s, burn_times, magnitudes, SRM_geometr
 
 def to_gif(name):
     f_path = sys.path[0] + "/thrust/burn_visu/" + name
-    # Duplicate first and last frames
-
     # Convert png to gif
     os.system("convert `ls -v %s_*.png` %s.gif" % (f_path, f_path))
+    # Convert gif to mov
+    os.system("convert -delay 10 %s.gif %s.mov" % (f_path, f_path))
     # Remove png
     os.system("rm -rf %s_*.png" % f_path)
 
