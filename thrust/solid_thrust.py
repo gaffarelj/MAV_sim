@@ -31,7 +31,7 @@ class thrust:
         self.c_real = self.eta_c * self.c_ideal                                                     # [m/s] real characteristic velocity
 
         # Initial assumptions
-        self.r = 1e-5       # [m/s] initial regression rate, close to 0
+        self.r = 1e-9       # [m/s] initial regression rate, close to 0
         self.b = 0          # [m] burnt thickness
         self.S = 0          # [m2] burning surface
 
@@ -64,37 +64,19 @@ class thrust:
         dS = max(S - self.S, 0)
         self.S = S
 
-        # Compute propulsion characteristics at this time step
-        self.m_dot = dS * self.r * self.rho_p                                   # [kg/s] mass flow
-        self.p_c = fsolve(self.solve_p_c, 1e5)[0]                               # [Pa] combustion chamber pressure
-        self.p_e = fsolve(self.solve_p_e, self.p_c/1000)[0]                     # [Pa] exhaust pressure
-        self.V_e = np.sqrt(2*self.gamma/(self.gamma-1) * self.R_A/self.M * self.T_c * (1-(self.p_e/self.p_c)**((self.gamma-1)/self.gamma)))   # [m/s] exhaust velocity
-        self.F_T = self.m_dot * self.V_e + (self.p_e - self.p_a) * self.A_e     # [N] thrust
+        # Stop the thrust if there is no surface burning anymore
+        if self.S == 0:
+            self.m_dot, self.p_c, self.p_e, self.V_e, self.F_T, self.r = 0, 0, 0, 0, 0, 0
+        else:
+            # Compute propulsion characteristics at this time step
+            self.m_dot = dS * self.r * self.rho_p                                   # [kg/s] mass flow
+            self.p_c = fsolve(self.solve_p_c, 1e5)[0]                               # [Pa] combustion chamber pressure
+            self.p_e = fsolve(self.solve_p_e, self.p_c/1000)[0]                     # [Pa] exhaust pressure
+            self.V_e = np.sqrt(2*self.gamma/(self.gamma-1) * self.R_A/self.M * self.T_c * (1-(self.p_e/self.p_c)**((self.gamma-1)/self.gamma)))   # [m/s] exhaust velocity
+            self.F_T = self.m_dot * self.V_e + (self.p_e - self.p_a) * self.A_e     # [N] thrust
 
-        # Update the regression rate
-        self.r = self.a * (self.p_c/1e6) ** self.n    # [m/s]
+            # Update the regression rate
+            self.r = self.a * (self.p_c/1e6) ** self.n    # [m/s]
 
         # Return the thrust
         return self.F_T
-
-# from thrust.models import tubular
-# # Define the geometry
-# R_o = 0.55
-# R_i = 0.1
-# L = 1.2
-# tubular_test = tubular.tubular_SRM(R_o, R_i, L)
-
-# SRM_thrust = thrust(tubular_test)
-
-# times = np.arange(0, 60, 0.01)
-# magnitudes = []
-# for time in times:
-#     F_T = SRM_thrust.magnitude(time)
-#     magnitudes.append(F_T)
-
-
-# plt.plot(times, np.array(magnitudes)/1e3)
-# plt.xlabel("Time [s]"), plt.ylabel("Thrust [kN]")
-# plt.grid()
-# plt.tight_layout
-# plt.show()
