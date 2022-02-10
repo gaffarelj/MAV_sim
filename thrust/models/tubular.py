@@ -25,20 +25,26 @@ class tubular_SRM:
         # Compute the burning surface
         return burning_P * self.L
 
-    def plot_geometry(self, b=0, save=None):
+    def plot_geometry(self, b=0, save=None, ax_in=None):
         # First, check the validity of the given burnt thickness
         self.check_b(b)
 
         from matplotlib import pyplot as plt
         thetas = np.arange(0, 2*np.pi, 0.01)
-        ax = plt.subplot(111, polar=True)
+        if ax_in is None:
+            ax = plt.subplot(111, polar=True)
+        else:
+            ax = ax_in
         # Plot the inner ring
         ax.plot(thetas, [self.R_i+b]*len(thetas), color="black")
         # Plot the outer ring
         ax.plot(thetas, [self.R_o]*len(thetas), color="black")
+        # Fill everything in red (as burning)
+        ax.fill_between(thetas, 0, self.R_o, color="#f6902f")
         # Fill the grain area between the rings
-        ax.fill_between(thetas, self.R_i+b, self.R_o, color="grey", alpha=0.5)
-        ax.set_ylim([0,self.R_o*1.5])
+        ax.fill_between(thetas, self.R_i+b, self.R_o, color="#bbb")
+        # Set plot limits and ticks
+        ax.set_ylim([0,self.R_o*1.25])
         ax.set_yticks([self.R_i, self.R_o])
         plt.title("Tubular SRM geometry with:\n$R_i=%.2f$ [m], $R_o=%.2f$ [m], $L=%.2f$ [m], $b=%.2f$ [m]" % (self.R_i, self.R_o, self.L, b))
         plt.tight_layout()
@@ -46,5 +52,5 @@ class tubular_SRM:
         if save is not None:
             plt.savefig(save)
             plt.close()
-        else:
+        elif ax_in is None:
             plt.show()

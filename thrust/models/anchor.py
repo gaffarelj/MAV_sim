@@ -1,229 +1,172 @@
-from ctypes import c_int16
 import numpy as np
-from matplotlib import pyplot as plt
 
-# Define geometry
-N_a = 3
-R_o = 1
-R_i = 0.25
-w = 0.2
-r_f = 0.035
-delta_s = 0.12
+class anchor_SRM:
 
-# Check conditions
-c_1 = 0 < R_i and R_i < R_o
-c_2 = 0 < w and w < (R_o - R_i) / 3
-c_3 = 0 < r_f and r_f < (R_o - 3 * w - R_i) / 2
-c_4 = 2 <= N_a
-c_5 = 0 < delta_s and delta_s < 2* R_i * np.sin(np.pi/N_a)
-c_6 = np.arcsin( (delta_s + 2 * w)/(2 * (R_i + w)) ) + np.arcsin( (r_f + w)/(R_i + 2 * w + r_f) ) < np.pi/N_a
-print(c_1, c_2, c_3, c_4, c_5, c_6)
+    def __init__(self, R_o, R_i, N_a, w, r_f, delta_s, L):
+        # Check geometry validity
+        c_1 = 0 < R_i and R_i < R_o
+        c_2 = 0 < w and w < (R_o - R_i) / 3
+        c_3 = 0 < r_f and r_f < (R_o - 3 * w - R_i) / 2
+        c_4 = 2 <= N_a
+        c_5 = 0 < delta_s and delta_s < 2* R_i * np.sin(np.pi/N_a)
+        c_6 = np.arcsin( (delta_s + 2 * w)/(2 * (R_i + w)) ) + np.arcsin( (r_f + w)/(R_i + 2 * w + r_f) ) < np.pi/N_a
+        if not c_1:
+            raise ValueError("The inner radius 'R_i' must be smaller than the outer radius 'R_o'.")
+        if not c_2:
+            raise ValueError("The anchor spacing 'w' must be at most a third of the distance between 'R_o' and 'R_i'.")
+        if not c_3:
+            raise ValueError("The fillet radius 'r_f' must be smaller than the remaining space when removing the inner radius 'R_i' and 3 times the anchor spacing 'w' from the outer radius 'R_o'.")
+        if not c_4:
+            raise ValueError("There should be at least two anchor spokes.")
+        if not c_5:
+            raise ValueError("The width of the anchor shank must allow for the inner arc defined by 'R_i' to be higher than a point.")
+        if not c_6:
+            raise ValueError("With this geometry, the anchors will be attached together while the centre of the SRM will still have propellant, which is not valid.")
+        # Save the parameters of the geometry
+        self.R_o = R_o
+        self.R_i = R_i
+        self.N_a = N_a
+        self.w = w
+        self.r_f = r_f
+        self.delta_s = delta_s
+        self.L = L
+        # Compute the web thickness
+        self.w_t = np.sqrt((w + r_f)**2 + 2 * R_o**2 - 2 * R_o * np.sqrt(R_o**2 - 2 * R_o * (w + r_f)) + w + r_f ) - r_f
+        # Compute the web through the detached sliver
+        self.w_ds = (R_i**2 + ( 2 * w + r_f - np.sqrt(R_i**2 + 2 * R_i * (2 * w + r_f) + 3 * w**2 + 2 * r_f * w) ) * R_i + 2 * w * (w + r_f)) / \
+            (np.sqrt(R_i**2 + 2 * R_i * (2 * w + r_f) + 3 * w**2 + 2 * r_f * w) + r_f - R_i)
 
-# Compute burning perimeter
-w_t = np.sqrt((w + r_f)**2 + 2 * R_o**2 - 2 * R_o * np.sqrt(R_o**2 - 2 * R_o * (w + r_f)) + w + r_f ) - r_f
-w_ds = (R_i**2 + ( 2 * w + r_f - np.sqrt(R_i**2 + 2 * R_i * (2 * w + r_f) + 3 * w**2 + 2 * r_f * w) ) * R_i + 2 * w * (w + r_f)) / \
-    (np.sqrt(R_i**2 + 2 * R_i * (2 * w + r_f) + 3 * w**2 + 2 * r_f * w) + r_f - R_i)
+    def check_b(self, b):
+        # Check the validity of the given burnt thickness
+        if b >= max(self.w, self.w_t, self.w_ds):
+            raise ValueError("The burnt thickness 'b' is too high.")
 
-P_s = []
-b_s = np.arange(0, max(w, w_t, w_ds), 0.0001)
-for b in b_s:
-    # Perimeter 1
-    if 0 <= b and b <= w:
-        P1 = (R_i + b) * (np.pi/N_a - np.arcsin((delta_s+2*b)/(2*(R_i+b))))
-    elif w < b and b <= w_ds:
-        P1 = (R_i+b) * ( np.arcsin( (r_f+w)/(R_i+2*w+r_f) ) - np.arccos( (R_i**2+(2*w+b+r_f)*R_i+(2*w-b)*r_f+2*w**2)/((R_i+2*w+r_f)*(R_i+b)) ) )
-    else:
-        P1 = 0
+    def burning_S(self, b):
+        # First, check the validity of the given burnt thickness
+        self.check_b(b)
+        
+        P1, P2, P3, P4, P5, P6, P7 = [0]*7
+        # Perimeter 1
+        if 0 <= b and b <= self.w:
+            P1 = (self.R_i + b) * (np.pi/self.N_a - np.arcsin((self.delta_s+2*b)/(2*(self.R_i+b))))
+        elif self.w < b and b <= self.w_ds:
+            P1 = (self.R_i+b) * ( np.arcsin( (self.r_f+self.w)/(self.R_i+2*self.w+self.r_f) ) - \
+                np.arccos( (self.R_i**2+(2*self.w+b+self.r_f)*self.R_i+(2*self.w-b)*self.r_f+2*self.w**2)/((self.R_i+2*self.w+self.r_f)*(self.R_i+b)) ) )
+        # Perimeter 2
+        if b <= self.w:
+            P2 = np.sqrt((self.R_i+2*self.w-b)**2-(self.delta_s/2+b)**2) - np.sqrt((self.R_i+b)**2-(self.delta_s/2+b)**2)
+        # Perimeter 3
+        if b <= self.w:
+            P3 = (self.R_i+2*self.w-b)*( np.pi/self.N_a - np.arcsin( (self.delta_s+2*b)/(2*(self.R_i+2*self.w-b)) ) -\
+                np.arcsin( (self.r_f+self.w)/(self.R_i+2*self.w+self.r_f) ) )
+        # Perimeter 4
+        if b <= self.w:
+            P4 = (self.r_f+b) * np.arccos( (self.r_f+self.w)/(self.R_i+2*self.w+self.r_f) )
+        elif b <= self.w_ds:
+            P4 = (self.r_f+b) * (np.arccos( (self.r_f+self.w)/(self.R_i+2*self.w+self.r_f) ) \
+                -np.arccos( (self.r_f+self.w)/(self.r_f+b) ) - np.arccos( ((self.R_i+2*self.w+self.r_f)**2 + \
+                (self.r_f+b)**2 - (self.R_i+b)**2)/(2*(self.R_i+2*self.w+self.r_f)*(self.r_f+b)) ) )
+        # Perimeter 5
+        if b <= self.w:
+            P5 = np.sqrt((self.R_o-self.w-self.r_f)**2 - (self.r_f+self.w)**2) - np.sqrt((self.R_i+2*self.w+self.r_f)**2 - (self.r_f+self.w)**2)
+        # Perimeter 6
+        if b <= self.w:
+            P6 = (self.r_f+b)* (np.pi/2 + np.arcsin( (self.r_f+self.w)/(self.R_o-self.w-self.r_f) ))
+        elif b <= self.w_t:
+            P6 = (self.r_f+b)* (np.arccos( ((self.R_o-self.w-self.r_f)**2 + (self.r_f+b)**2 - self.R_o**2)/(2*(self.R_o-self.w-self.r_f)*(self.r_f+b)) ) \
+                - np.arccos((self.r_f+self.w)/(self.r_f+b)) - np.arccos((self.r_f+self.w)/(self.R_o-self.w-self.r_f)))
+            #### TODO: check this (change w_t to w_ds ?)
+            P6 = max(0, P6)
+        # Perimeter 7
+        if b <= self.w:
+            P7 = (self.R_o-self.w+b) * (np.pi/self.N_a - np.arcsin( (self.r_f+self.w)/(self.R_o-self.w-self.r_f) ))
 
-    # Perimeter 2
-    if b <= w:
-        P2 = np.sqrt((R_i+2*w-b)**2-(delta_s/2+b)**2) - np.sqrt((R_i+b)**2-(delta_s/2+b)**2)
-    else:
-        P2 = 0
+        return (P1+P2+P3+P4+P5+P6+P7) * 2 * self.N_a * self.L
 
-    # Perimeter 3
-    if b <= w:
-        P3 = (R_i+2*w-b)*( np.pi/N_a - np.arcsin( (delta_s+2*b)/(2*(R_i+2*w-b)) ) - np.arcsin( (r_f+w)/(R_i+2*w+r_f) ) )
-    else:
-        P3 = 0
+    def plot_geometry(self, b=0, save=None, ax_in=None):
+        # First, check the validity of the given burnt thickness
+        self.check_b(b)
 
-    # Perimeter 4
-    if b <= w:
-        P4 = (r_f+b) * np.arccos( (r_f+w)/(R_i+2*w+r_f) )
-    elif b <= w_ds:
-        P4 = (r_f+b) * (np.arccos( (r_f+w)/(R_i+2*w+r_f) ) -np.arccos( (r_f+w)/(r_f+b) ) - np.arccos( ((R_i+2*w+r_f)**2 + (r_f+b)**2 - (R_i+b)**2)/(2*(R_i+2*w+r_f)*(r_f+b)) ) )
-    else:
-        P4 = 0
+        # Convert certesian coordinates to polar coordinates
+        def make_polar(x, y, angle=0):
+            theta = np.arctan(y/x) + angle
+            r = np.sqrt(x**2+y**2)
+            return theta, r
 
-    # Perimeter 5
-    if b <= w:
-        P5 = np.sqrt((R_o-w-r_f)**2 - (r_f+w)**2) - np.sqrt((R_i+2*w+r_f)**2 - (r_f+w)**2)
-    else:
-        P5 = 0
-
-    # Perimeter 6
-    if b <= w:
-        P6 = (r_f+b)* (np.pi/2 + np.arcsin( (r_f+w)/(R_o-w-r_f) ))
-    elif b <= w_t:
-        P6 = (r_f+b)* (np.arccos( ((R_o-w-r_f)**2 + (r_f+b)**2 - R_o**2)/(2*(R_o-w-r_f)*(r_f+b)) ) - np.arccos((r_f+w)/(r_f+b)) - np.arccos((r_f+w)/(R_o-w-r_f)))
-        P6 = max(0, P6)
-    else:
-        P6 = 0
-
-    # Perimeter 7
-    if b <= w:
-        P7 = (R_o-w+b) * (np.pi/N_a - np.arcsin( (r_f+w)/(R_o-w-r_f) ))
-    else:
-        P7 = 0
-
-    P_s.append([P1, P2, P3, P4, P5, P6, P7])
-
-P_s = np.array(P_s)
-
-# for i in range(7):
-#     plt.plot(b_s, P_s[:,i], label="P%i" % (i+1))
-plt.plot(b_s, np.sum(P_s, axis=1)*2*N_a, label="Total")
-
-plt.xlabel("Burnt thickness [m]"), plt.ylabel("Burning perimeter [m]")
-# plt.legend()
-plt.grid(), plt.tight_layout()
-plt.show()
-    
-
-if False:
-    ## Define geometry (http://dx.doi.org/10.5937/str1802048T, https://arc-aiaa-org.tudelft.idm.oclc.org/doi/pdf/10.2514/6.2008-4697)
-    # R1 < R2 < R3 < R4 [m]
-    R1, R2, R3, R4 = 0.1, 0.4, 0.45, 0.8
-    # R1 < D < R2 [m]
-    D = 0.25
-    # S < R1 [m]
-    S = 0.05
-    # Length [m]
-    L = 3
-
-    def plot_geometry(R1, R2, R3, R4, D, S):
-        def get_xy(R, angle):
-            return R * np.sin(angle), R * np.cos(angle)
-
-        def do_append(x, y, X, Y, condition=True):
-            if condition:
-                X.append(x), Y.append(y)
-            else:
-                X.append(np.nan), Y.append(np.nan)
-
-        X1, Y1, X2, Y2, X3, Y3, X4, Y4 = [], [], [], [], [], [], [], []
-        s2_a = np.inf
-        for theta in np.linspace(0, 2*np.np.pi, 300):
-            x1, y1 = get_xy(R1, theta)
-            do_append(x1, y1, X1, Y1, np.fabs(x1) >= S/2)
-            x2, y2 = get_xy(R2, theta)
-            if R1 < R2:
-                do_append(x2, y2, X2, Y2, np.fabs(y2) >= D and np.fabs(x2) >= S/2)
-                if np.fabs(y2) < D:
-                    s2_a = min(np.fabs(x2), s2_a)
-            else:
-                if np.fabs(y2) < D:
-                    s2_a = min(np.fabs(x1), s2_a)
-            x3, y3 = get_xy(R3, theta)
-            do_append(x3, y3, X3, Y3, np.fabs(y3) >= D)
-            x4, y4 = get_xy(R4, theta)
-            do_append(x4, y4, X4, Y4)
-        plt.plot(X1, Y1), plt.plot(X2, Y2), plt.plot(X3, Y3), plt.plot(X4, Y4)
-        s2_b = s2_a + R3 - R2
-        for s1 in [-1, +1]:
-            for s2 in [-1, +1]:
-                if R2 > R1:
-                    plt.plot([s1*S/2, s1*S/2], [s2*R1, s2*R2], color="black")
-                plt.plot([s1*s2_a, s1*s2_b], [s2*D, s2*D], color="black")
-        plt.xlim([-1.0, 1.0]), plt.ylim([-1, 1])
-        plt.axis('equal'), plt.grid()
-
-    t = 0
-    A_s = []
-    while R3 < R4:
-        # Phase 1
-        if t <= (R2-R1)/2:
-            P1 = (R1+t) * np.arccos((S/2+t)/(R1+t))
-            P2 = (R2-t) * np.sin( np.arccos((S/2+t)/(R2-t)) ) - (R1+t) * np.sin( np.arccos((S/2+t)/(R1+t)) )
-            P3 = (R2-t) * (np.np.pi/2 - np.arcsin((D-t)/(R2-t)) - np.arcsin((S/2+t)/(R2-t)))
-            P4 = (R3+t) * np.cos( np.arcsin((D-t)/R3+t) ) - (R2-t)*np.cos( np.arcsin((D-t)/(R2-t)) )
-            P5 = (R3+t) * (np.np.pi/2 - np.arcsin((D-t)/(R3+t)))
-            P = 4*(P1+P2+P3+P4+P5)
-            A = P*L
-            R1_i, R3_i = R1, R3
-        # Phase 2
-        elif t <= D - (R2-R1)/2:
-            D_i = D - (R2-R1)/2
-            P1 = (R1_i+t) * np.arcsin((D_i-t)/(R1_i+t))
-            P2 = (R3_i+t) * np.cos( np.arcsin((D_i-t)/(R3_i+t)) ) - (R1_i+t) * np.cos( np.arcsin((D_i-t)/(R1_i+t)) )
-            P3 = (R3_i+t) * (np.np.pi/2 - np.arcsin((D_i-t)/(R3_i+t)))
-            P = 4*(P1+P2+P3)
-            A = P*L
-        # Phase 3
-        elif t <= R4-R3-D:
-            pass
-        R1 += t
-        R2 -= t
-        R3 += t
-        S += 2*t
-        D -= t
-        # plot_geometry(R1, R2, R3, R4, D, S)
-        # plt.draw()
-        # plt.pause(0.0005)
-        # plt.clf()
-        t += 0.0001
-        A_s.append(A)
-    plt.plot(np.linspace(0, t, len(A_s)), A_s)
-    plt.xlabel("Burnt thickness [m]"), plt.ylabel("Burning area [m$^2$]")
-    plt.grid()
-    plt.tight_layout()
-    plt.show()
-
-
-if False:
-    import numpy as np
-    from scipy.optimize import fsolve
-
-
-    def solve_p_c(p_c):
-        # Solve equation for the chamber pressure
-        return (c_real * (rho_p - (p_c*M/R_A/T_c) ) * a * S / A_t)**(1/(1-n)) - p_c
-
-    def solve_p_e(p_e):
-        # Solve equation for the exhaust pressure
-        return Gamma / np.sqrt(2*gamma/(gamma-1) * (p_e/p_c)**(2/gamma) * (1 - (p_e/p_c)**((gamma-1)/gamma))) - A_e/A_t
-
-
-    # Given values
-    gamma = 1.19    # [-] specific heat ratio
-    a = 0.004       # [-] burning rate coefficient
-    n = 0.3         # [-] burning rate exponent
-    rho_p = 1800    # [kg/m3] propellant density
-    A_t = 2e-4      # [m2] throat area
-    A_e = 4e-3      # [m2] exhaust area
-    M = 0.031       # [kg/mol] molar mass
-    R_A = 8.314     # [J/mol/K] gas constant
-    eta_c = 0.93    # [-] combustion efficiency
-    T_c = 3400      # [K] combustion temperature
-    p_a = 1e5       # [Pa] ambient pressure
-
-    dt = 0.001  # [s] time step
-    S = 2       # [m2] burning surface
-
-    # Initial assumptions
-    dS = 0.5    # [m2] difference of surface burned betweet t_i and t_i-1
-    r = 0.001   # [m/s] initial regression rate, close to 0
-
-    # Compute invariables
-    Gamma = np.sqrt(gamma) * (2/(gamma+1))**((gamma+1)/(2*(gamma-1)))   # [-] Vandenkerckhove function
-    c_ideal = np.sqrt(R_A/M*T_c)/Gamma                                  # [m/s] ideal characteristic velocity
-    c_real = eta_c * c_ideal                                            # [m/s] real characteristic velocity
-
-    # Compute values at this time step
-    m_dot = dS * r * rho_p                              # [kg/s] mass flow
-    p_c = fsolve(solve_p_c, 1e5)[0]                     # [Pa] combustion chamber pressure
-    p_e = fsolve(solve_p_e, p_c/100)[0]                 # [Pa] exhaust pressure
-    V_e = np.sqrt(2*gamma/(gamma-1) * R_A/M * T_c * (1-(p_e/p_c)**((gamma-1)/gamma)))   # [m/s] exhaust velocity
-    F_T = m_dot * V_e + (p_e - p_a) * A_e               # [N] thrust
-
-    print(F_T)
+        from matplotlib import pyplot as plt
+        thetas = np.linspace(0, 2*np.pi, 100)
+        if ax_in is None:
+            ax = plt.subplot(111, polar=True)
+        else:
+            ax = ax_in
+        # Plot the outer ring
+        ax.plot(thetas, [self.R_o]*len(thetas), color="black")
+        # Compute the angle encompassing the half width of the anchor shank
+        thickness_rad = np.arctan(self.delta_s/2/self.R_i)
+        # Compute the angle encompassing the half width of the anchor spoke
+        anchor_angle = np.pi/self.N_a - np.arctan((self.r_f+self.w)/(self.R_i+2*self.w+self.r_f))
+        # Fill everything in grey (as propellant)
+        ax.fill_between(thetas, 0, self.R_o, color="#bbb")
+        for i in range(self.N_a):
+            # Plot the side of the anchor
+            side_theta_a, side_r = make_polar(np.linspace(self.R_i, self.R_i+2*self.w, 100), np.ones(100)*(self.delta_s/2), 2*np.pi/self.N_a*i)
+            side_theta_b, side_r = make_polar(np.linspace(self.R_i, self.R_i+2*self.w, 100), -np.ones(100)*(self.delta_s/2), 2*np.pi/self.N_a*i)
+            # Compute correction due to curvature
+            dr = np.fabs(self.R_i**2*(max(side_theta_a)-2*np.pi/self.N_a*i)/4**2-self.delta_s**2/4)
+            ax.plot(side_theta_a, side_r-dr, color="black")
+            ax.plot(side_theta_b, side_r-dr, color="black")
+            # Fill the burning area inside the fins
+            ax.fill_betweenx(np.linspace(self.R_i+dr, self.R_i+2*self.w+b, 100), side_theta_a, side_theta_b, color="#f6902f")
+            # Plot the inner circle with holes where the anchor is
+            left_a, right_a = thickness_rad+2*np.pi/self.N_a*i, -thickness_rad+2*np.pi/self.N_a*(i+1)
+            etas_a = np.linspace(left_a, right_a, 100)
+            ax.plot(etas_a, np.ones(100)*(self.R_i), color="black")
+            # Fill the burning area in the inner circle
+            ax.fill_between(thetas, 0, self.R_i, color="#f6902f")
+            # Plot the innermost side of the anchor
+            left_b1, right_b1 = side_theta_a[-1], anchor_angle+2*np.pi/self.N_a*i
+            etas_b1 = np.linspace(left_b1, right_b1, 100)
+            ax.plot(etas_b1, np.ones(100)*(self.R_i+2*self.w), color="black")
+            left_b2, right_b2 = side_theta_b[-1], -anchor_angle+2*np.pi/self.N_a*i
+            etas_b2 = np.linspace(left_b2, right_b2, 100)
+            ax.plot(etas_b2, np.ones(100)*(self.R_i+2*self.w), color="black")
+            # Plot the outermost side of the anchor
+            etas_b3 = np.linspace(right_b1, right_b2, 100)
+            ax.plot(etas_b3, np.ones(100)*(self.R_o-self.w), color="black")
+            # Fill the burning area in the anchor
+            ax.fill_between(etas_b3, self.R_i+2*self.w, self.R_o-self.w, color="#f6902f")
+            # Plot the anchor fillets
+            fillet_center_x_a = self.R_i+2*self.w+self.r_f
+            fillet_center_x_b = self.R_o-self.w-self.r_f
+            circle_theta_a, circle_r_a = make_polar(fillet_center_x_a + np.cos(np.linspace(np.pi/2, np.pi, 100)) * self.r_f, \
+                np.sin(np.linspace(np.pi/2, np.pi, 100)) * self.r_f, anchor_angle + 2*np.pi/self.N_a*i)
+            ax.plot(circle_theta_a, circle_r_a, color="black")
+            circle_theta_b, circle_r_b = make_polar(fillet_center_x_b + np.cos(np.linspace(0, np.pi/2, 100)) * self.r_f, \
+                np.sin(np.linspace(0, np.pi/2, 100)) * self.r_f, anchor_angle + 2*np.pi/self.N_a*i)
+            ax.plot(circle_theta_b, circle_r_b, color="black")
+            circle_theta_c, circle_r_c = make_polar(fillet_center_x_a + np.cos(np.linspace(np.pi, 3*np.pi/2, 100)) * self.r_f, \
+                np.sin(np.linspace(np.pi, 3*np.pi/2, 100)) * self.r_f, -anchor_angle + 2*np.pi/self.N_a*i)
+            ax.plot(circle_theta_c, circle_r_c, color="black")
+            circle_theta_d, circle_r_d = make_polar(fillet_center_x_b + np.cos(np.linspace(3*np.pi/2, 2*np.pi, 100)) * self.r_f, \
+                np.sin(np.linspace(3*np.pi/2, 2*np.pi, 100)) * self.r_f, -anchor_angle + 2*np.pi/self.N_a*i)
+            ax.plot(circle_theta_d, circle_r_d, color="black")
+            # Plot fillet straight part
+            fillet_line_a, fillet_line_b = [circle_theta_a[0], circle_theta_b[-1]], [circle_theta_c[-1], circle_theta_d[0]]
+            ax.plot(fillet_line_a, [circle_r_a[0], circle_r_b[-1]], color="black")
+            ax.plot(fillet_line_b, [circle_r_c[-1], circle_r_d[0]], color="black")
+            # Fill the burning area from the fillet
+            ax.fill_between(circle_theta_a, circle_r_a, np.ones(100)*fillet_center_x_a, color="#f6902f")
+            ax.fill_between(circle_theta_b, circle_r_b, np.ones(100)*fillet_center_x_a, color="#f6902f")
+            ax.fill_between(circle_theta_c, circle_r_c, np.ones(100)*fillet_center_x_a, color="#f6902f")
+            ax.fill_between(circle_theta_d, circle_r_d, np.ones(100)*fillet_center_x_a, color="#f6902f")
+        # Set plot limits and ticks
+        ax.set_ylim([0,self.R_o*1.25])
+        ax.set_yticks([self.R_i, self.R_i+2*self.w, self.R_o-self.w, self.R_o])
+        # Use a tight layout
+        plt.tight_layout()
+        # Save or show the plot
+        if save is not None:
+            plt.savefig(save)
+            plt.close()
+        elif ax_in is None:
+            plt.show()

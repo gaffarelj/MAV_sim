@@ -50,13 +50,16 @@ class rod_and_tube_SRM:
         # Plot the outer ring (only if it has not burned out yet)
         if self.R_mid+b < self.R_o:
             ax.plot(thetas, [self.R_o]*len(thetas), color="black")
+        # Fill everything in red (as burning)
+            ax.fill_between(thetas, 0, self.R_o, color="#f6902f")
         # Fill the grain area inside the inner ring (only if it has not burned out yet)
         if self.R_i-b > 0:
-            ax.fill_between(thetas, 0, self.R_i-b, color="grey", alpha=0.5)
+            ax.fill_between(thetas, 0, self.R_i-b, color="#bbb", alpha=1)
         # Fill the grain area between the intermediate and outer rings (only if it has not burned out yet)
         if self.R_mid+b < self.R_o:
-            ax.fill_between(thetas, self.R_mid+b, self.R_o, color="grey", alpha=0.5)
-        ax.set_ylim([0,self.R_o*1.5])
+            ax.fill_between(thetas, self.R_mid+b, self.R_o, color="#bbb", alpha=1)
+        # Set plot limits and ticks
+        ax.set_ylim([0,self.R_o*1.25])
         ax.set_yticks([self.R_i, self.R_mid, self.R_o])
         plt.title(
             """Rod and tube SRM geometry with:
