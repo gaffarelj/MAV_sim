@@ -1,6 +1,7 @@
 import numpy as np
 import sys
 sys.path.append("/mnt/c/TUDAT/tudat-bundle/build/tudatpy")
+#sys.path.append("/cala/jeremie/tudat-bundle/build/tudatpy")
 # Set path to uppermost project level
 sys.path = [p for p in sys.path if p != ""]
 while sys.path[0].split("/")[-1] != "MAV_sim":
@@ -19,18 +20,18 @@ refine_region = [False]         # When True, only refine the grid in the region 
 # Scale the number of particles by these
 particles_scales = {
     100: [1e2, 10],
-    125: [3e2, 10],
-    150: [5e2, 10],
-    175: [1e3, 10],
-    200: [5e3, 10],
-    225: [1e4, 10],
-    250: [5e4, 10],
-    275: [1e5, 10],
-    300: [5e5, 10],
-    350: [1e6, 10],
-    400: [5e6, 10],
-    450: [1e7, 10],
-    500: [5e7, 10]
+    125: [5e3, 10],
+    150: [5e4, 10],
+    175: [1e5, 10],
+    200: [5e5, 10],
+    225: [1e6, 10],
+    250: [5e6, 10],
+    275: [1e7, 10],
+    300: [5e7, 10],
+    350: [1e8, 10],
+    400: [5e8, 10],
+    450: [1e9, 10],
+    500: [5e9, 10]
 }
 # Set whether to use the exhaust plume or not
 use_exhaust = False
@@ -290,7 +291,7 @@ for j, s_name in enumerate(vehicle_names):
             input_s += "run                 %i\n" % run_n
             input_s += "\n"
         
-        run_all_cmd += "mpirun -np 16 spa_ < in.%s_%skm | tee ../results_sparta/%s/stats_%ikm.dat\n" % (s_name, h, s_name, h)
+        run_all_cmd += "mpirun -np 20 spa_ < in.%s_%skm | tee ../results_sparta/%s/stats_%ikm.dat\n" % (s_name, h, s_name, h)
         for i_r in range(len(run_fractions)):
             paraview_grid += "\n"
             paraview_grid += "rm -rf vals_%s_%skm_%i \n" % (s_name, h, i_r)
