@@ -14,7 +14,7 @@ create_grid         137 98 98
 
 balance_grid        rcb part
 
-global              nrho 1.5015e+12 fnum 6.2346e+07 vstream -3407.0700 0.0 0.0 temp 179.3820
+global              nrho 1.5015e+12 fnum 6.2346e+05 vstream -3407.0700 0.0 0.0 temp 179.3820
 
 species             ../atmo.species CO2 N2 Ar CO O O2
 mixture             atmo CO2 frac 0.0065
@@ -69,7 +69,7 @@ print "Refinement level 1"
 timestep            2.8345e-06
 adapt_grid          all refine coarsen value c_knudsen[2] 5 50 combine min thresh less more cells 2 2 2
 scale_particles     all 10
-global              fnum 6.2346e+06
+global              fnum 6.2346e+04
 undump              0
 dump                1 grid all 125 ../results_sparta/MAV_stage_2/vals_300km_1.*.dat id f_n_avg f_nrho_avg f_massrho_avg f_u_avg f_T_avg c_knudsen[*]
 balance_grid        rcb part
