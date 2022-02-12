@@ -32,7 +32,7 @@ class FakeAeroGuidance(propagation.AerodynamicGuidance):
 class MAV_ascent:
 
     def __init__(self, launch_epoch, launch_lat, launch_lon, launch_h, mass_1, mass_2, \
-        launch_angles, thrust_magnitudes, target_orbit_h, target_orbit_i, max_a, max_AoA, staging_altitude):
+        launch_angles, thrust_magnitudes, target_orbit_h, target_orbit_i, max_a, max_AoA):
         self.launch_epoch = launch_epoch
         self.launch_lat, self.launch_lon = launch_lat, launch_lon
         self.launch_h = launch_h
@@ -44,7 +44,7 @@ class MAV_ascent:
         self.target_orbit_i = target_orbit_i
         self.max_acceleration = max_a
         self.max_angle_of_attack = max_AoA
-        self.staging_altitude = staging_altitude
+        self.last_h = -np.inf
 
     def create_bodies(self, stage):
         self.current_stage = stage
@@ -173,21 +173,20 @@ class MAV_ascent:
             self.dependent_variables_to_save = []
 
     def create_termination_settings(self, end_time=200*60):
+
+        def is_vehicle_falling(_time):
+            dh = self.current_body.flight_conditions.altitude - self.last_h
+            self.last_h = self.current_body.flight_conditions.altitude
+            return dh < 0
+
         termination_min_altitude_settings = propagation_setup.propagator.dependent_variable_termination(
             dependent_variable_settings=propagation_setup.dependent_variable.altitude(self.current_name, "Mars"),
             limit_value=-10e3,
             use_as_lower_limit=True)
         if self.current_stage == 1:
-            termination_max_altitude_settings = propagation_setup.propagator.dependent_variable_termination(
-                dependent_variable_settings=propagation_setup.dependent_variable.altitude(self.current_name, "Mars"),
-                limit_value=self.staging_altitude,
-                use_as_lower_limit=False,
-                terminate_exactly_on_final_condition=True,
-                termination_root_finder_settings=root_finders.secant(
-                    maximum_iteration=3,
-                    maximum_iteration_handling=root_finders.MaximumIterationHandling.accept_result))
+            termination_apogee_settings = propagation_setup.propagator.custom_termination(is_vehicle_falling)
             self.combined_termination_settings = propagation_setup.propagator.hybrid_termination(
-            [termination_max_altitude_settings, termination_min_altitude_settings], fulfill_single_condition=True)
+            [termination_apogee_settings, termination_min_altitude_settings], fulfill_single_condition=True)
         else:
             termination_max_time_settings = propagation_setup.propagator.time_termination(self.initial_epoch + end_time)
             self.combined_termination_settings = propagation_setup.propagator.hybrid_termination(

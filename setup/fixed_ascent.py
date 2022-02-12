@@ -28,8 +28,7 @@ MAV_ascent = ascent.MAV_ascent(
     target_orbit_h = 300e3,             # MAV­-OSO­-01
     target_orbit_i = np.deg2rad(25),    # MAV­-OSO­-03
     max_a = 15 * 9.80665,               # MAV­-LL-­02
-    max_AoA = np.deg2rad(4),            # MAV­-LL-­05
-    staging_altitude = 280e3
+    max_AoA = np.deg2rad(4)             # MAV­-LL-­05
 )
 
 from tudatpy.kernel.numerical_simulation import environment_setup
