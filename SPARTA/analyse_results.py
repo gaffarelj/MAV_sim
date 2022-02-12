@@ -1,7 +1,9 @@
 import numpy as np
 import sys
-import sys
-sys.path.insert(0, "/mnt/c/Users/jerem/OneDrive - Delft University of Technology/current/Thesis/MAV_sim")
+# Set path to uppermost project level
+sys.path = [p for p in sys.path if p != ""]
+while sys.path[0].split("/")[-1] != "MAV_sim":
+    sys.path.insert(0,"/".join(sys.path[0].split("/")[:-1]))
 
 # Define the altitudes and satellite names for which there is results to analyse
 hs = [100, 125, 150, 175, 200, 225, 250, 275, 300, 350, 400, 450, 500]
@@ -57,7 +59,7 @@ for i_s, s_name in enumerate(sat_names):
         cz = 2*np.mean(fz[-3:])/(rhos[i_h]*Vs[i_h]**2*ref_areas[i_s])
 
         # Print the force coefficients
-        print("Aero coefficients: [%.5f, %.5f, %.5f]" % (cx, cy, cz))
+        print("Aero coefficients: [%.4f, %.4f, %.4f]" % (cx, cy, cz))
         if False:
             # Plot the force in each direction
             PU.plot_single(times, fx, "Timestep number [-]", "$F_x$ [N]", "SPARTA/fx_%s_%skm" % (s_name, h))
