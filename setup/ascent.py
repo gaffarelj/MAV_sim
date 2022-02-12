@@ -74,7 +74,7 @@ class MAV_ascent:
             )
         else:
             self.current_body.set_constant_mass(self.stage_2_wet_mass)
-            CDs = [1.59860, 1.77670, 1.75737, 1.74900, 1.74924, 1.70594, 1.69850, 1.71255, 1.68698, 1.67177, 1.67533, 1.68058, 1.67640]
+            CDs = CDs = [1.5986, 1.7730, 1.7659, 1.7397, 1.7166, 1.7022, 1.6930, 1.6871, 1.6843, 1.6830, 1.6837, 1.6843, 1.6815]
             hs =   np.array([100, 125, 150, 175, 200, 225, 250, 275, 300, 350, 400, 450, 500])*1e3
             cs = interpolate.interp1d(hs, CDs, kind="quadratic", bounds_error=False, fill_value="extrapolate")
             def get_CD(dep_vars):
