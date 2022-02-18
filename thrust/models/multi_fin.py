@@ -29,6 +29,10 @@ class multi_fin_SRM:
             if b >= (self.R_o - self.R_i):
                 raise ValueError("The burnt thickness 'b' is too high.")
 
+    def get_V_p(self):
+        # Return the propellant volume
+        return (np.pi*(self.R_o**2 - self.R_i**2) + self.N_f*self.w_f*self.L_f) * self.L
+
     def burning_S(self, b):
         # First, check the validity of the given burnt thickness
         self.check_b(b)
