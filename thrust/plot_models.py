@@ -27,7 +27,7 @@ print_and_show_analysis = False
 
 def compute_thrust(SRM_geometry):
     SRM_thrust = ST.thrust(SRM_geometry)
-    times = np.arange(0, 60, 0.0025)
+    times = np.arange(0, 75, 0.0025)
     burn_times, magnitudes, b_s, p_c_s, M_p_s = [], [], [], [], []
     for time in times:
         F_T = SRM_thrust.compute_magnitude(time)
