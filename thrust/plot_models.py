@@ -13,26 +13,29 @@ from scipy import interpolate
 # Import solid thrust model
 from thrust import solid_thrust as ST
 
-# TODO Change burning color as a function of p_c
-
 # Specify which geometry to test
 geometries_to_plot = {
     "tubular": 1,
     "rod_and_tube": 1,
     "multi_fin": 1,
-    "anchor": 1
+    "anchor": 1,
+    "STAR_20": 1,
+    "stage_test": 1
 }
+
+print_and_show_analysis = False
 
 def compute_thrust(SRM_geometry):
     SRM_thrust = ST.thrust(SRM_geometry)
-    times = np.arange(0, 60, 0.05)
-    burn_times, magnitudes, b_s, p_c_s = [], [], [], []
+    times = np.arange(0, 60, 0.0025)
+    burn_times, magnitudes, b_s, p_c_s, M_p_s = [], [], [], [], []
     for time in times:
-        F_T = SRM_thrust.magnitude(time)
+        F_T = SRM_thrust.compute_magnitude(time)
         magnitudes.append(F_T)
         b_s.append(SRM_thrust.b)
         burn_times.append(time)
         p_c_s.append(SRM_thrust.p_c)
+        M_p_s.append(SRM_thrust.M_p)
         # Stop the thrust if the magnitude is 0 for the last 10 steps
         if np.sum(magnitudes[-10:]) == 0:
             break
@@ -42,8 +45,9 @@ def compute_thrust(SRM_geometry):
     magnitudes = [interpolate.interp1d(burn_times, magnitudes)(t) for t in new_burn_times]
     b_s = [interpolate.interp1d(burn_times, b_s)(t) for t in new_burn_times]
     p_c_s = [interpolate.interp1d(burn_times, p_c_s)(t) for t in new_burn_times]
+    M_p_s = [interpolate.interp1d(burn_times, M_p_s)(t) for t in new_burn_times]
     burn_times = new_burn_times
-    return burn_times, magnitudes, b_s, p_c_s
+    return burn_times, magnitudes, b_s, p_c_s, M_p_s
 
 def plot_geometry_and_thrust(save_path, b_s, burn_times, magnitudes, SRM_geometry):
     for i, b in enumerate(b_s):
@@ -63,9 +67,12 @@ def plot_geometry_and_thrust(save_path, b_s, burn_times, magnitudes, SRM_geometr
         # Add a global figure title
         fig.suptitle(str(SRM_geometry))
         fig.tight_layout()
-        # Save the figure
-        plt.savefig(save_path.replace(".", "-") + "%.4f.png" % burn_times[i])
-        plt.close()
+        # Save (or show) the figure
+        if save_path == "SHOW":
+            plt.show()
+        else:
+            plt.savefig(save_path.replace(".", "-") + "%.4f.png" % burn_times[i])
+            plt.close()
 
 def to_gif(name):
     f_path = sys.path[0] + "/thrust/burn_visu/" + name
@@ -85,7 +92,16 @@ from models.multi_fin import multi_fin_SRM
 multi_fin_test = multi_fin_SRM(R_o=1, R_i=0.65, N_f=8, w_f=0.15, L_f=0.3, L=3, run_checks=False)
 from models.anchor import anchor_SRM
 anchor_test = anchor_SRM(R_o=1, R_i=0.25, N_a=3, w=0.2, r_f=0.05, delta_s=0.15, L=3, run_checks=False)
-geometries = [tubular_test, rod_and_tube_test, multi_fin_test, anchor_test]
+
+STAR_20 = multi_fin_SRM(R_o=0.24, R_i=0.125, N_f=10, w_f=0.025, L_f=0.05, L=1.0, run_checks=False)
+
+STAR_20_thrust_model = ST.thrust(STAR_20)
+if print_and_show_analysis:
+    print("%.2f/272.88 kg of propellant"%STAR_20_thrust_model.M_p, "%.2f/29 kg of innert mass"%STAR_20_thrust_model.M_innert)
+
+#stage_test = multi_fin_SRM(R_o=0.275, R_i=0.15, N_f=12, w_f=0.0225, L_f=0.075, L=1.125, run_checks=False)
+stage_test = rod_and_tube_SRM(R_o=0.28, R_mid=0.14, R_i=0.135, L=1.125, run_checks=False)
+geometries = [tubular_test, rod_and_tube_test, multi_fin_test, anchor_test, STAR_20, stage_test]
 
 # Loop trough the geometries
 for i, (name, to_plot) in enumerate(geometries_to_plot.items()):
@@ -94,7 +110,15 @@ for i, (name, to_plot) in enumerate(geometries_to_plot.items()):
 
         # Compute the thrust over time
         print("Computing thrust over time for the %s SRM geometry..." % name.replace("_", " "))
-        burn_times, magnitudes, b_s, p_c_s = compute_thrust(SRM_geometry)
+        burn_times, magnitudes, b_s, p_c_s, M_p_s = compute_thrust(SRM_geometry)
+
+        if print_and_show_analysis:
+            print("Thrust of %.2f/9.75 kN for %.1f/55s" % (max(magnitudes)/1e3, burn_times[-1]))
+            plt.plot(burn_times, M_p_s)
+            plt.xlabel("Time [s]"), plt.ylabel("Propellant mass [kg]")
+            plt.grid(), plt.tight_layout()
+            plt.show()
+            plot_geometry_and_thrust("SHOW", b_s, burn_times, magnitudes, SRM_geometry)
 
         # Plot the geometry burn over time
         print("Plotting thrust and geometry over time for the %s SRM geometry..." % name.replace("_", " "))
