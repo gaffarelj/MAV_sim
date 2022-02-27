@@ -10,12 +10,22 @@ import numpy as np
 
 from tudatpy.kernel.numerical_simulation import environment
 
+from thrust.solid_thrust import thrust as SRM_thrust
+
 class MAV_thrust:
 
-    def __init__(self, ascent_model, angle, magnitude, Isp):
+    def __init__(self, ascent_model, angle, thrust_model):
         self.angle = angle
-        self.magnitude = magnitude
-        self.Isp = Isp
+        if type(thrust_model) == list and type(thrust_model[0]) in [float, int]:
+            self.thrust_type = "constant"
+            self.magnitude = thrust_model[0]
+            self.Isp = thrust_model[1]
+        elif type(thrust_model) == SRM_thrust:
+            self.thrust_type = "from_geometry"
+            self.magnitude_function = thrust_model.compute_magnitude
+            self.Isp_function = thrust_model.get_Isp
+        else:
+            raise NotImplementedError("The thrust model `%s` does not correspond to anything implemented" % type(thrust_model))
         self.ascent_model = ascent_model
         self.coasting = False
 
@@ -30,10 +40,16 @@ class MAV_thrust:
             self.coasting = True
 
     def get_thrust_magnitude(self, time):
-        return self.magnitude
+        if self.thrust_type == "constant":
+            return self.magnitude
+        elif self.thrust_type == "from_geometry":
+            return self.magnitude_function(time)
 
     def get_specific_impulse(self, time):
-        return self.Isp
+        if self.thrust_type == "constant":
+            return self.Isp
+        elif self.thrust_type == "from_geometry":
+            return self.Isp_function(time)
 
     def get_thrust_orientation(self, time):
         # Get aerodynamic angle calculator
@@ -50,8 +66,4 @@ class MAV_thrust:
         # Compute the thrust in the inertial frame
         thrust_inertial_frame = np.dot(vertical_to_inertial_frame,
                                     thrust_direction_vertical_frame)
-                                    
-        # rot_matrix = np.matrix(np.identity(6))
-        # np.fill_diagonal(rot_matrix, thrust_inertial_frame)
-        # return rot_matrix
         return thrust_inertial_frame
