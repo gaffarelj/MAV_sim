@@ -7,23 +7,49 @@ sys.path = [p for p in sys.path if p != ""]
 while sys.path[0].split("/")[-1] != "MAV_sim":
     sys.path.insert(0,"/".join(sys.path[0].split("/")[:-1]))
 
+########################################
+### PROPELLANT TO BE USED: TP-H-3544 ###
+# https://ieeexplore-ieee-org.tudelft.idm.oclc.org/document/8742205
+########################################
+
+# TODO: find data of remaining elements
 
 class thrust:
 
-    def __init__(self, geometry_model, rho_p=1800, A_t=0.0019635, A_e=0.1452):
+    def __init__(self, geometry_model, A_t=0.0019635, epsilon=50.2):
         self.geometry_model = geometry_model
-        self.gamma = 1.19   # [-] specific heat ratio
-        self.a = 0.004      # [-] burning rate coefficient
-        self.n = 0.3        # [-] burning rate exponent
-        self.rho_p = rho_p  # [kg/m3] propellant density
-        self.A_t = A_t      # [m2] throat area
-        self.A_e = A_e      # [m2] exhaust area
-        self.M = 0.031      # [kg/mol] molar mass
+        self.A_t = A_t              # [m2] throat area << fix it
+        self.A_e = A_t * epsilon    # [m2] exhaust area << make epsilon variable and compute A_e
+        self.T_c = 3645             # V [K] combustion temperature (https://ieeexplore-ieee-org.tudelft.idm.oclc.org/document/8742205)
+        self.p_a = 650              # V [Pa] ambient pressure ("Sea level" on Mars)
+        self.last_t = None          # [s] last function call time
+
+        # Efficiencies: may be overkill, and some of them could be removed?
+        self.eta_I_sp = 0.95    # V [-] Specific impulse efficiency Table 2 p.271
+        self.thrust_eff = 0.95  # TBD [-] Thrust efficiency ???
+        self.eta_c = 0.93       # TBD [-] combustion efficiency
+
+        # Propellant data for CTPB TP-H-3062 (CTPB14/Al16/AP70), similar to TP-H-3544 (TP-H-3544 is HTPB [does not self-degrade, not even in vacuum of space])
+        # REF: p.12 of http://31.186.81.235:8080/api/files/view/38619.pdf
+        self.a = 0.004202   # V [?] burning rate coefficient (to use with pressure in MPa)
+        self.n = 0.31       # V [?] burning rate exponent (to use with pressure in MPa)
+        # Molar mass of HTPB: 2.8 kg/mol (https://www.crayvalley.com/docs/default-source/tds/poly-bd-r-45htlo.pdf?sfvrsn=3cdb46f5_6)
+        # Molar mass of Al: 0.02698 kg/mol
+        # Molar mass of Ammonium perchlorate: 0.11749 kg/mol
+        self.M = 0.4785598  # ?? [kg/mol] molar mass = 0.16*0.02698+0.7*0.11749+0.14*2.8
         self.R_A = 8.314    # [J/mol/K] gas constant
-        self.eta_c = 0.93   # [-] combustion efficiency
-        self.T_c = 3400     # [K] combustion temperature
-        self.p_a = 650      # [Pa] ambient pressure
-        self.last_t = None  # [s] last function call time
+        # 1749 kg/m3 for TP-H-3062 in DAMNOGLYOXIME AND DAMNOFURAZAN IN PROPELLANTS BASED ON AMMONUMPERCHLORATE
+        # Mars Ascent Vehicle—Propellant Aging: TP-H-3544 has higher density than TP-H-3062
+        # Rocket propulsion elements (p.479): 1854.5 kg/m3
+        self.rho_p = 1854.5 # V [kg/m3] propellant density
+        self.gamma = 1.175   # TBD [-] specific heat ratio
+
+        #########
+        #### Rocket Propulsion Elements: Figure 15-6: adding 0-20% of ultra-fine aluminum increases regression rate by 0-75%
+        #########
+
+        self.M_p = self.geometry_model.get_V_p() * self.rho_p   # [kg] total propellant mass
+        self.M_innert = 0.2833*self.M_p**0.789+10               # [kg] innert mass with titanium casing (with R^2=0.985) # REF: p.497 TRP reader # added 10 kg for TVC, based on results from Mars_Ascent_Vehicle_MAV_Propulsion_Subsystems_Design
 
         # Compute invariables
         self.Gamma = np.sqrt(self.gamma) * (2/(self.gamma+1))**((self.gamma+1)/(2*(self.gamma-1)))  # [-] Vandenkerckhove function
@@ -35,6 +61,8 @@ class thrust:
         self.b = 0          # [m] burnt thickness
         self.S = 0          # [m2] burning surface
 
+        self.m_dot = None
+
     def solve_p_c(self, p_c):
         # Solve equation for the chamber pressure
         rho_c = (p_c*self.M/self.R_A/self.T_c)  # [kg/m3] chamber density
@@ -44,10 +72,10 @@ class thrust:
         # Solve equation for the exhaust pressure
         return self.Gamma / np.sqrt(2*self.gamma/(self.gamma-1) * (p_e/self.p_c)**(2/self.gamma) * (1 - (p_e/self.p_c)**((self.gamma-1)/self.gamma))) - self.A_e/self.A_t
 
-    def magnitude(self, time):
+    def compute_magnitude(self, time):
         # Compute the current timestep
         if self.last_t is None:
-            dt = 1e-3
+            dt = 1e-6
         else:
             dt = time - self.last_t
         self.last_t = time
@@ -55,21 +83,17 @@ class thrust:
 
         # Get the current burning surface
         try:
-            S = self.geometry_model.burning_S(self.b)
+            self.S = self.geometry_model.burning_S(self.b)
         # Return 0 if the burn thickness is too high
         except ValueError:
             return 0
-
-        # Compute the change in burning surface
-        dS = max(S - self.S, 0)
-        self.S = S
 
         # Stop the thrust if there is no surface burning anymore
         if self.S == 0:
             self.m_dot, self.p_c, self.p_e, self.V_e, self.F_T, self.r = 0, 0, 0, 0, 0, 0
         else:
             # Compute propulsion characteristics at this time step
-            self.m_dot = dS * self.r * self.rho_p                                   # [kg/s] mass flow
+            self.m_dot = self.S * self.r * self.rho_p                               # [kg/s] mass flow
             self.p_c = fsolve(self.solve_p_c, 1e5)[0]                               # [Pa] combustion chamber pressure
             self.p_e = fsolve(self.solve_p_e, self.p_c/1000)[0]                     # [Pa] exhaust pressure
             self.V_e = np.sqrt(2*self.gamma/(self.gamma-1) * self.R_A/self.M * self.T_c * (1-(self.p_e/self.p_c)**((self.gamma-1)/self.gamma)))   # [m/s] exhaust velocity
@@ -78,5 +102,19 @@ class thrust:
             # Update the regression rate
             self.r = self.a * (self.p_c/1e6) ** self.n    # [m/s]
 
+            # Update the propellant mass
+            self.M_p -= self.m_dot * dt
+
+        # Compute the specific impulse [s]
+        self.I_sp = self.V_e / 9.80665
+
         # Return the thrust
         return self.F_T
+
+    def get_Isp(self, time=None):
+        return self.I_sp
+
+    def get_m_dot(self, time):
+        if self.m_dot is None or self.F_T == 0:
+            return 0
+        return -np.fabs(self.m_dot)
