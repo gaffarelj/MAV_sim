@@ -12,9 +12,8 @@ from tudatpy.kernel.interface import spice_interface
 from tudatpy.kernel.numerical_simulation import environment, environment_setup
 from tudatpy.kernel.numerical_simulation import propagation, propagation_setup
 from tudatpy.util import result2array
-from tudatpy.kernel.math import root_finders
 
-from thrust import MAV_thrust
+from setup.thrust import MAV_thrust
 
 # Load the SPICE kernel
 spice_interface.load_standard_kernels()
@@ -32,21 +31,21 @@ class FakeAeroGuidance(propagation.AerodynamicGuidance):
 class MAV_ascent:
 
     def __init__(self, launch_epoch, launch_lat, launch_lon, launch_h, mass_1, mass_2, \
-        launch_angles, thrust_magnitudes, target_orbit_h, target_orbit_i, max_a, max_AoA):
+        launch_angles, thrust_models, target_orbit_h, target_orbit_i, max_a, max_AoA):
         self.launch_epoch = launch_epoch
         self.launch_lat, self.launch_lon = launch_lat, launch_lon
         self.launch_h = launch_h
         self.stage_1_wet_mass, self.stage_1_dry_mass = mass_1[0], mass_1[1]
         self.stage_2_wet_mass, self.stage_2_dry_mass = mass_2[0], mass_2[1]
         self.launch_angles = launch_angles
-        self.thrust_magnitudes = thrust_magnitudes
+        self.thrust_models = thrust_models
         self.target_orbit_h = target_orbit_h
         self.target_orbit_i = target_orbit_i
         self.max_acceleration = max_a
         self.max_angle_of_attack = max_AoA
         self.last_h = -np.inf
 
-    def create_bodies(self, stage):
+    def create_bodies(self, stage, include_aero=True):
         self.current_stage = stage
         self.current_name = "MAV stage %i" % self.current_stage
         # Create Mars
@@ -85,18 +84,16 @@ class MAV_ascent:
                 reference_area=0.144,
                 independent_variable_names=[environment.AerodynamicCoefficientsIndependentVariables.altitude_dependent]
             )
-        environment_setup.add_aerodynamic_coefficient_interface(self.bodies, self.current_name, coefficient_settings)
+        if include_aero:
+            environment_setup.add_aerodynamic_coefficient_interface(self.bodies, self.current_name, coefficient_settings)
         self.bodies_to_propagate = [self.current_name]
 
     def create_accelerations(self, only_thrust_dict=False):
         # Define thrust
-        if self.current_stage == 1:
-            thrust = MAV_thrust(self, self.launch_angles[0], self.thrust_magnitudes[0], 293)
-        else:
-            thrust = MAV_thrust(self, self.launch_angles[1], self.thrust_magnitudes[1], 282)
+        self.thrust = MAV_thrust(self, self.launch_angles[self.current_stage-1], self.thrust_models[self.current_stage-1])
         #thrust_direction_settings = propagation_setup.thrust.custom_thrust_orientation(thrust.get_thrust_orientation)
-        thrust_direction_settings = propagation_setup.thrust.custom_thrust_direction(thrust.get_thrust_orientation)
-        thrust_magnitude_settings = propagation_setup.thrust.custom_thrust_magnitude(thrust.get_thrust_magnitude, thrust.get_specific_impulse, thrust.is_thrust_on)
+        thrust_direction_settings = propagation_setup.thrust.custom_thrust_direction(self.thrust.get_thrust_orientation)
+        thrust_magnitude_settings = propagation_setup.thrust.custom_thrust_magnitude(self.thrust.get_thrust_magnitude, self.thrust.get_specific_impulse, self.thrust.is_thrust_on)
 
         if only_thrust_dict:
             accelerations_on_vehicle = {
