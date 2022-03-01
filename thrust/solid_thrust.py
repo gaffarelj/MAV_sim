@@ -14,7 +14,7 @@ while sys.path[0].split("/")[-1] != "MAV_sim":
 
 # TODO: find data of remaining elements
 
-class thrust:
+class SRM_thrust:
 
     def __init__(self,
         geometry_model,
@@ -28,6 +28,7 @@ class thrust:
         M=0.4785598,    # [kg/mol] propellant molar mass
         gamma=1.175,    # [-] specific heat ratio of the propellant
         eta_Isp=0.95,   # [-] Specific impulse efficiency
+        eta_c=0.93,     # [-] Combustion efficiency
         eta_F_T=0.95):  # [-] Thrust efficiency
 
         self.geometry_model = geometry_model
@@ -58,6 +59,7 @@ class thrust:
         # Efficiencies
         self.eta_Isp = eta_Isp      # TRP Table 2 p.271
         self.eta_F_T = eta_F_T
+        self.eta_c = eta_c
 
         self.M_p = self.geometry_model.get_V_p() * self.rho_p   # [kg] total propellant mass
         self.M_innert = 0.2833*self.M_p**0.789+10               # [kg] innert mass with titanium casing (with R^2=0.985) # REF: p.497 TRP reader # added 10 kg for TVC, based on results from Mars_Ascent_Vehicle_MAV_Propulsion_Subsystems_Design

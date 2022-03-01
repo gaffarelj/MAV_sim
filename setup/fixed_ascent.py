@@ -17,7 +17,7 @@ from tudatpy.kernel.astro import time_conversion
 from setup import ascent
 # from thrust.models.multi_fin import multi_fin_SRM
 from thrust.models.rod_and_tube import rod_and_tube_SRM
-from thrust.solid_thrust import thrust as SRM_thrust
+from thrust.solid_thrust import SRM_thrust
 
 # Max D=0.57m, most assumed is D=0.51m
 # SRM_stage_1 = multi_fin_SRM(R_o=0.275, R_i=0.15, N_f=12, w_f=0.0225, L_f=0.075, L=0.8)#, run_checks=False)

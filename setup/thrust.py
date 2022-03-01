@@ -10,7 +10,7 @@ import numpy as np
 
 from tudatpy.kernel.numerical_simulation import environment
 
-from thrust.solid_thrust import thrust as SRM_thrust
+from thrust.solid_thrust import SRM_thrust
 
 class MAV_thrust:
 

@@ -11,7 +11,7 @@ from matplotlib import pyplot as plt
 from scipy import interpolate
 
 # Import solid thrust model
-from thrust import solid_thrust as ST
+from thrust.solid_thrust import SRM_thrust
 
 # Specify which geometry to test
 geometries_to_plot = {
@@ -27,16 +27,16 @@ geometries_to_plot = {
 print_and_show_analysis = False
 
 def compute_thrust(SRM_geometry):
-    SRM_thrust = ST.thrust(SRM_geometry)
+    current_SRM_thrust = SRM_thrust(SRM_geometry)
     times = np.arange(0, 75, 0.0025)
     burn_times, magnitudes, b_s, p_c_s, M_p_s = [], [], [], [], []
     for time in times:
-        F_T = SRM_thrust.compute_magnitude(time)
+        F_T = current_SRM_thrust.compute_magnitude(time)
         magnitudes.append(F_T)
-        b_s.append(SRM_thrust.b)
+        b_s.append(current_SRM_thrust.b)
+        p_c_s.append(current_SRM_thrust.p_c)
+        M_p_s.append(current_SRM_thrust.M_p)
         burn_times.append(time)
-        p_c_s.append(SRM_thrust.p_c)
-        M_p_s.append(SRM_thrust.M_p)
         # Stop the thrust if the magnitude is 0 for the last 10 steps
         if np.sum(magnitudes[-10:]) == 0:
             break
@@ -98,7 +98,7 @@ spherical_test = spherical_SRM(R_o=1, R_i=0.5, run_checks=False)
 
 STAR_20 = multi_fin_SRM(R_o=0.24, R_i=0.125, N_f=10, w_f=0.025, L_f=0.05, L=1.0, run_checks=False)
 
-STAR_20_thrust_model = ST.thrust(STAR_20)
+STAR_20_thrust_model = SRM_thrust(STAR_20)
 if print_and_show_analysis:
     print("%.2f/272.88 kg of propellant"%STAR_20_thrust_model.M_p, "%.2f/29 kg of innert mass"%STAR_20_thrust_model.M_innert)
 
