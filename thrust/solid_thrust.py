@@ -16,37 +16,48 @@ while sys.path[0].split("/")[-1] != "MAV_sim":
 
 class thrust:
 
-    def __init__(self, geometry_model, A_t=0.0019635, epsilon=50.2):
-        self.geometry_model = geometry_model
-        self.A_t = A_t              # [m2] throat area << fix it
-        self.A_e = A_t * epsilon    # [m2] exhaust area << make epsilon variable and compute A_e
-        self.T_c = 3645             # V [K] combustion temperature (https://ieeexplore-ieee-org.tudelft.idm.oclc.org/document/8742205)
-        self.p_a = 650              # V [Pa] ambient pressure ("Sea level" on Mars)
-        self.last_t = None          # [s] last function call time
+    def __init__(self,
+        geometry_model,
+        A_t=0.0019635,  # [m2] throat area
+        epsilon=50.2,   # [-] area ratio (exhaust/throat)
+        T_c=3645,       # [K] combustion temperature (https://ieeexplore-ieee-org.tudelft.idm.oclc.org/document/8742205)
+        p_a=650,        # [Pa] ambient pressure (650Pa = "Sea level" on Mars)
+        a=0.004202,     # [...] burning rate coefficient (to use with pressure in MPa)
+        n=0.31,         # [-] burning rate exponent (to use with pressure in MPa)
+        rho_p=1854.5,   # [kg/m3] propellant density
+        M=0.4785598,    # [kg/mol] propellant molar mass
+        gamma=1.175,    # [-] specific heat ratio of the propellant
+        eta_Isp=0.95,   # [-] Specific impulse efficiency
+        eta_F_T=0.95):  # [-] Thrust efficiency
 
-        # Efficiencies: may be overkill, and some of them could be removed?
-        self.eta_I_sp = 0.95    # V [-] Specific impulse efficiency Table 2 p.271
-        self.thrust_eff = 0.95  # TBD [-] Thrust efficiency ???
-        self.eta_c = 0.93       # TBD [-] combustion efficiency
+        self.geometry_model = geometry_model
+        self.A_t = A_t
+        self.A_e = A_t * epsilon
+        self.T_c = T_c              
+        self.p_a = p_a
 
         # Propellant data for CTPB TP-H-3062 (CTPB14/Al16/AP70), similar to TP-H-3544 (TP-H-3544 is HTPB [does not self-degrade, not even in vacuum of space])
         # REF: p.12 of http://31.186.81.235:8080/api/files/view/38619.pdf
-        self.a = 0.004202   # V [?] burning rate coefficient (to use with pressure in MPa)
-        self.n = 0.31       # V [?] burning rate exponent (to use with pressure in MPa)
+        self.a = a              
+        self.n = n              
         # Molar mass of HTPB: 2.8 kg/mol (https://www.crayvalley.com/docs/default-source/tds/poly-bd-r-45htlo.pdf?sfvrsn=3cdb46f5_6)
         # Molar mass of Al: 0.02698 kg/mol
         # Molar mass of Ammonium perchlorate: 0.11749 kg/mol
-        self.M = 0.4785598  # ?? [kg/mol] molar mass = 0.16*0.02698+0.7*0.11749+0.14*2.8
+        self.M = M          # = 0.16*0.02698+0.7*0.11749+0.14*2.8
         self.R_A = 8.314    # [J/mol/K] gas constant
         # 1749 kg/m3 for TP-H-3062 in DAMNOGLYOXIME AND DAMNOFURAZAN IN PROPELLANTS BASED ON AMMONUMPERCHLORATE
         # Mars Ascent Vehicle—Propellant Aging: TP-H-3544 has higher density than TP-H-3062
         # Rocket propulsion elements (p.479): 1854.5 kg/m3
-        self.rho_p = 1854.5 # V [kg/m3] propellant density
-        self.gamma = 1.175   # TBD [-] specific heat ratio
+        self.rho_p = rho_p
+        self.gamma = gamma
 
         #########
         #### Rocket Propulsion Elements: Figure 15-6: adding 0-20% of ultra-fine aluminum increases regression rate by 0-75%
         #########
+
+        # Efficiencies
+        self.eta_Isp = eta_Isp      # TRP Table 2 p.271
+        self.eta_F_T = eta_F_T
 
         self.M_p = self.geometry_model.get_V_p() * self.rho_p   # [kg] total propellant mass
         self.M_innert = 0.2833*self.M_p**0.789+10               # [kg] innert mass with titanium casing (with R^2=0.985) # REF: p.497 TRP reader # added 10 kg for TVC, based on results from Mars_Ascent_Vehicle_MAV_Propulsion_Subsystems_Design
@@ -62,6 +73,7 @@ class thrust:
         self.S = 0          # [m2] burning surface
 
         self.m_dot = None
+        self.last_t = None          # [s] last function call time
 
     def solve_p_c(self, p_c):
         # Solve equation for the chamber pressure
@@ -98,6 +110,7 @@ class thrust:
             self.p_e = fsolve(self.solve_p_e, self.p_c/1000)[0]                     # [Pa] exhaust pressure
             self.V_e = np.sqrt(2*self.gamma/(self.gamma-1) * self.R_A/self.M * self.T_c * (1-(self.p_e/self.p_c)**((self.gamma-1)/self.gamma)))   # [m/s] exhaust velocity
             self.F_T = self.m_dot * self.V_e + (self.p_e - self.p_a) * self.A_e     # [N] thrust
+            self.F_T *= self.eta_F_T
 
             # Update the regression rate
             self.r = self.a * (self.p_c/1e6) ** self.n    # [m/s]
@@ -107,6 +120,7 @@ class thrust:
 
         # Compute the specific impulse [s]
         self.I_sp = self.V_e / 9.80665
+        self.I_sp *= self.eta_Isp
 
         # Return the thrust
         return self.F_T
