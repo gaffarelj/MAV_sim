@@ -1,4 +1,5 @@
 import numpy as np
+from scipy import interpolate
 from scipy.optimize import fsolve
 
 import sys
@@ -20,9 +21,9 @@ class SRM_thrust:
         geometry_model,
         A_t=0.0019635,  # [m2] throat area
         epsilon=50.2,   # [-] area ratio (exhaust/throat)
-        T_c=3645,       # [K] combustion temperature (https://ieeexplore-ieee-org.tudelft.idm.oclc.org/document/8742205)
+        T_c=3645,       # [K] chamber temperature (https://ieeexplore-ieee-org.tudelft.idm.oclc.org/document/8742205)
         p_a=650,        # [Pa] ambient pressure (650Pa = "Sea level" on Mars)
-        a=0.004202,     # [...] burning rate coefficient (to use with pressure in MPa)
+        a=0.004202,     # [m/s/MPa] burning rate coefficient (to use with pressure in MPa)
         n=0.31,         # [-] burning rate exponent (to use with pressure in MPa)
         rho_p=1854.5,   # [kg/m3] propellant density
         M=0.4785598,    # [kg/mol] propellant molar mass
@@ -134,3 +135,25 @@ class SRM_thrust:
         if self.m_dot is None or self.F_T == 0:
             return 0
         return -np.fabs(self.m_dot)
+
+    def simulate_full_burn(self, dt=0.0025):
+        burn_times, magnitudes, b_s, p_c_s, M_p_s = [], [], [], [], []
+        time = 0
+        # Keep computing thrust until the magnitude settles to 0
+        while time == 0 or np.sum(magnitudes[-10:]) != 0:
+            F_T = self.compute_magnitude(time)
+            magnitudes.append(F_T)
+            b_s.append(self.b)
+            p_c_s.append(self.p_c)
+            M_p_s.append(self.M_p)
+            burn_times.append(time)
+            time += dt
+
+        # Resample thrust properties vs time list
+        new_burn_times = np.linspace(burn_times[0], burn_times[-1], 50)
+        magnitudes = [interpolate.interp1d(burn_times, magnitudes)(t) for t in new_burn_times]
+        b_s = [interpolate.interp1d(burn_times, b_s)(t) for t in new_burn_times]
+        p_c_s = [interpolate.interp1d(burn_times, p_c_s)(t) for t in new_burn_times]
+        M_p_s = [interpolate.interp1d(burn_times, M_p_s)(t) for t in new_burn_times]
+        burn_times = new_burn_times
+        return burn_times, magnitudes, b_s, p_c_s, M_p_s

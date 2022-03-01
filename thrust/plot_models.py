@@ -8,7 +8,6 @@ while sys.path[0].split("/")[-1] != "MAV_sim":
 import os
 import numpy as np
 from matplotlib import pyplot as plt
-from scipy import interpolate
 
 # Import solid thrust model
 from thrust.solid_thrust import SRM_thrust
@@ -25,30 +24,6 @@ geometries_to_plot = {
 }
 
 print_and_show_analysis = False
-
-def compute_thrust(SRM_geometry):
-    current_SRM_thrust = SRM_thrust(SRM_geometry)
-    times = np.arange(0, 75, 0.0025)
-    burn_times, magnitudes, b_s, p_c_s, M_p_s = [], [], [], [], []
-    for time in times:
-        F_T = current_SRM_thrust.compute_magnitude(time)
-        magnitudes.append(F_T)
-        b_s.append(current_SRM_thrust.b)
-        p_c_s.append(current_SRM_thrust.p_c)
-        M_p_s.append(current_SRM_thrust.M_p)
-        burn_times.append(time)
-        # Stop the thrust if the magnitude is 0 for the last 10 steps
-        if np.sum(magnitudes[-10:]) == 0:
-            break
-
-    # Resample thrust properties vs time list
-    new_burn_times = np.linspace(burn_times[0], burn_times[-1], 50)
-    magnitudes = [interpolate.interp1d(burn_times, magnitudes)(t) for t in new_burn_times]
-    b_s = [interpolate.interp1d(burn_times, b_s)(t) for t in new_burn_times]
-    p_c_s = [interpolate.interp1d(burn_times, p_c_s)(t) for t in new_burn_times]
-    M_p_s = [interpolate.interp1d(burn_times, M_p_s)(t) for t in new_burn_times]
-    burn_times = new_burn_times
-    return burn_times, magnitudes, b_s, p_c_s, M_p_s
 
 def plot_geometry_and_thrust(save_path, b_s, burn_times, magnitudes, SRM_geometry):
     for i, b in enumerate(b_s):
@@ -114,7 +89,7 @@ for i, (name, to_plot) in enumerate(geometries_to_plot.items()):
 
         # Compute the thrust over time
         print("Computing thrust over time for the %s SRM geometry..." % name.replace("_", " "))
-        burn_times, magnitudes, b_s, p_c_s, M_p_s = compute_thrust(SRM_geometry)
+        burn_times, magnitudes, b_s, p_c_s, M_p_s = SRM_thrust(SRM_geometry).simulate_full_burn()
 
         if print_and_show_analysis:
             print("Thrust of %.2f/9.75 kN for %.1f/55s" % (max(magnitudes)/1e3, burn_times[-1]))
