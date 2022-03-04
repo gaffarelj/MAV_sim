@@ -8,6 +8,7 @@ while sys.path[0].split("/")[-1] != "MAV_sim":
 import os
 import numpy as np
 from matplotlib import pyplot as plt
+from scipy import interpolate
 
 # Import solid thrust model
 from thrust.solid_thrust import SRM_thrust
@@ -25,7 +26,12 @@ geometries_to_plot = {
 
 print_and_show_analysis = False
 
-def plot_geometry_and_thrust(save_path, b_s, burn_times, magnitudes, SRM_geometry):
+def plot_geometry_and_thrust(save_path, b_s, burn_times, magnitudes, SRM_geometry, n_frames=50):
+    # Resample thrust properties vs time list
+    new_b_s = np.linspace(burn_times[0], burn_times[-1], 50)
+    b_s = [interpolate.interp1d(burn_times, b_s)(t) for t in new_b_s]
+    magnitudes = [interpolate.interp1d(burn_times, magnitudes)(t) for t in new_b_s]
+    burn_times = new_b_s
     for i, b in enumerate(b_s):
         # Create figure
         fig = plt.figure(figsize=(12,6))
@@ -89,7 +95,8 @@ for i, (name, to_plot) in enumerate(geometries_to_plot.items()):
 
         # Compute the thrust over time
         print("Computing thrust over time for the %s SRM geometry..." % name.replace("_", " "))
-        burn_times, magnitudes, b_s, p_c_s, M_p_s = SRM_thrust(SRM_geometry).simulate_full_burn()
+        SRM_thrust_model = SRM_thrust(SRM_geometry)
+        burn_times, magnitudes, b_s, p_c_s, M_p_s = SRM_thrust_model.simulate_full_burn()
 
         if print_and_show_analysis:
             print("Thrust of %.2f/9.75 kN for %.1f/55s" % (max(magnitudes)/1e3, burn_times[-1]))

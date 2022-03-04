@@ -1,6 +1,6 @@
 import numpy as np
-from scipy import interpolate
 from scipy.optimize import fsolve
+from scipy.interpolate import interp1d
 
 import sys
 # Set path to uppermost project level
@@ -26,7 +26,7 @@ class SRM_thrust:
         a=0.004202,     # [m/s/MPa] burning rate coefficient (to use with pressure in MPa)
         n=0.31,         # [-] burning rate exponent (to use with pressure in MPa)
         rho_p=1854.5,   # [kg/m3] propellant density
-        M=0.4785598,    # [kg/mol] propellant molar mass
+        M=0.028,#0.4785598,    # [kg/mol] propellant molar mass
         gamma=1.175,    # [-] specific heat ratio of the propellant
         eta_Isp=0.95,   # [-] Specific impulse efficiency
         eta_c=0.93,     # [-] Combustion efficiency
@@ -77,6 +77,11 @@ class SRM_thrust:
 
         self.m_dot = None
         self.last_t = None          # [s] last function call time
+        self.saved_burn_times = []
+        self.saved_magnitudes = []
+        self.saved_m_dot_s = []
+        self.magnitude_interpolator = None
+        self.m_dot_interpolator = None
 
     def solve_p_c(self, p_c):
         # Solve equation for the chamber pressure
@@ -128,32 +133,22 @@ class SRM_thrust:
         # Return the thrust
         return self.F_T
 
-    def get_Isp(self, time=None):
-        return self.I_sp
-
-    def get_m_dot(self, time):
-        if self.m_dot is None or self.F_T == 0:
-            return 0
-        return -np.fabs(self.m_dot)
-
-    def simulate_full_burn(self, dt=0.0025):
-        burn_times, magnitudes, b_s, p_c_s, M_p_s = [], [], [], [], []
+    def simulate_full_burn(self, dt=0.01):
+        b_s, p_c_s, M_p_s, m_dot_s = [], [], [], []
         time = 0
         # Keep computing thrust until the magnitude settles to 0
-        while time == 0 or np.sum(magnitudes[-10:]) != 0:
+        while time == 0 or np.sum(self.saved_magnitudes[-2:]) != 0:
             F_T = self.compute_magnitude(time)
-            magnitudes.append(F_T)
+            self.saved_magnitudes.append(F_T)
             b_s.append(self.b)
             p_c_s.append(self.p_c)
             M_p_s.append(self.M_p)
-            burn_times.append(time)
+            self.saved_burn_times.append(time)
+            #self.saved_Isp_s.append(self.I_sp)
+            self.saved_m_dot_s.append(self.m_dot)
             time += dt
 
-        # Resample thrust properties vs time list
-        new_burn_times = np.linspace(burn_times[0], burn_times[-1], 50)
-        magnitudes = [interpolate.interp1d(burn_times, magnitudes)(t) for t in new_burn_times]
-        b_s = [interpolate.interp1d(burn_times, b_s)(t) for t in new_burn_times]
-        p_c_s = [interpolate.interp1d(burn_times, p_c_s)(t) for t in new_burn_times]
-        M_p_s = [interpolate.interp1d(burn_times, M_p_s)(t) for t in new_burn_times]
-        burn_times = new_burn_times
-        return burn_times, magnitudes, b_s, p_c_s, M_p_s
+        self.magnitude_interpolator = interp1d(self.saved_burn_times, self.saved_magnitudes)
+        self.m_dot_interpolator = interp1d(self.saved_burn_times, self.saved_m_dot_s)
+
+        return self.saved_burn_times, self.saved_magnitudes, b_s, p_c_s, M_p_s

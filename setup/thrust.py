@@ -16,57 +16,70 @@ class MAV_thrust:
 
     def __init__(self, ascent_model, angle, thrust_model):
         self.angle = angle
-        if type(thrust_model) == list and type(thrust_model[0]) in [float, int]:
+        self.thrust_model = thrust_model
+        if type(self.thrust_model) == list and type(self.thrust_model[0]) in [float, int]:
             self.thrust_type = "constant"
-            self.magnitude = thrust_model[0]
-            self.Isp = thrust_model[1]
-            self.burn_time = thrust_model[2]
-        elif type(thrust_model) == SRM_thrust:
+            self.magnitude = self.thrust_model[0]
+            self.Isp = self.thrust_model[1]
+            self.burn_time = self.thrust_model[2]
+        elif type(self.thrust_model) == SRM_thrust:
             self.thrust_type = "from_geometry"
-            self.magnitude_function = thrust_model.compute_magnitude
-            self.Isp_function = thrust_model.get_Isp
+            print("Pre-running SRM burn simulation...", end="\r")
+            self.thrust_model.simulate_full_burn()
+            print("Pre-running SRM burn simulation finished.")
+            self.magnitude_function = self.thrust_model.magnitude_interpolator
+            self.m_dot_function = self.thrust_model.m_dot_interpolator
+            self.burn_time = self.thrust_model.saved_burn_times[-1]
         else:
-            raise NotImplementedError("The thrust model `%s` does not correspond to anything implemented" % type(thrust_model))
+            raise NotImplementedError("The thrust model `%s` does not correspond to anything implemented" % type(self.thrust_model))
         self.ascent_model = ascent_model
         self.coasting = False
-        self.thrust_model = thrust_model
-        self.thrust_times = []
-        self.magnitudes_history = []
+        self.first_t = None
+        self.last_t = None
+
+    def compute_time_elapsed(self, time):
+        if self.first_t is None:
+            self.first_t = time
+            self.time_elapsed = 0
+        else:
+            self.time_elapsed = time - self.first_t
+        self.last_t = time
 
     def is_thrust_on(self, time):
         if self.coasting:
             return False # Thrust is off if vehicle is coasting
-        if len(self.magnitudes_history) <= 2:
-            return True # If no coasting, compute thrust for at least two time steps
 
-        if self.thrust_type == "from_geometry":
-            thrust_on = np.sum(self.magnitudes_history[-2:]) != 0 # Do not compute thrust anymore if the magnitude from the geometry was 0 twice in a row
-            if not thrust_on:
-                print("Burnt distance:", self.thrust_model.b)
-        elif self.thrust_type == "constant":
-            time_elapsed = self.thrust_times[-1] - self.thrust_times[0] # Do not compute thrust anymore if the specified burn time has elapsed
-            thrust_on = time_elapsed < self.burn_time
-            if not thrust_on:
-                print("Time elapsed:", time_elapsed)
-        if not thrust_on: # If thrust is off, remember that we enter a coasting phase
-            self.coasting = True
+        if self.last_t != time:
+            self.compute_time_elapsed(time)
+
+        # Do not compute thrust anymore if specified burn time has elapsed
+        if self.time_elapsed > self.burn_time:
+            self.coasting = True # If thrust is off, remember that we enter a coasting phase
             return False
         return True
 
     def get_thrust_magnitude(self, time):
         if self.thrust_type == "constant":
-            _magnitude = self.magnitude
+            return self.magnitude
         elif self.thrust_type == "from_geometry":
-            _magnitude = self.magnitude_function(time)
-        self.thrust_times.append(time)
-        self.magnitudes_history.append(_magnitude)
-        return _magnitude
+            return self.magnitude_function(self.time_elapsed)
 
     def get_specific_impulse(self, time):
         if self.thrust_type == "constant":
             return self.Isp
         elif self.thrust_type == "from_geometry":
-            return self.Isp_function(time)
+            return 0
+
+    def get_mass_flow(self, time):
+        if self.last_t != time:
+            self.compute_time_elapsed(time)
+
+        if self.thrust_type == "from_geometry":
+            if self.time_elapsed > self.burn_time:
+                return 0
+            return -np.fabs(self.m_dot_function(self.time_elapsed))
+        else:
+            raise NotImplementedError("No mass flow model has been implemented in this case.")
 
     def get_thrust_orientation(self, time):
         # Get aerodynamic angle calculator
