@@ -89,5 +89,5 @@ class spherical_SRM:
 
     def __str__(self):
         return """Spherical SRM geometry with
-        $R_o = %.3f$ [m], $R_i = %i$ [m]""" \
+        $R_o = %.3f$ [m], $R_i = %.3f$ [m]""" \
         % (self.R_o, self.R_i)
