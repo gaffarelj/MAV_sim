@@ -30,13 +30,13 @@ class FakeAeroGuidance(propagation.AerodynamicGuidance):
 
 class MAV_ascent:
 
-    def __init__(self, launch_epoch, launch_lat, launch_lon, launch_h, mass_1, mass_2, \
+    def __init__(self, launch_epoch, launch_lat, launch_lon, launch_h, mass_stages, \
         launch_angles, thrust_models, target_orbit_h, target_orbit_i, max_a, max_AoA):
         self.launch_epoch = launch_epoch
         self.launch_lat, self.launch_lon = launch_lat, launch_lon
         self.launch_h = launch_h
-        self.stage_1_wet_mass, self.stage_1_dry_mass = mass_1[0], mass_1[1]
-        self.stage_2_wet_mass, self.stage_2_dry_mass = mass_2[0], mass_2[1]
+        self.stage_1_wet_mass = mass_stages[0]
+        self.stage_2_wet_mass = mass_stages[1]
         self.launch_angles = launch_angles
         self.thrust_models = thrust_models
         self.target_orbit_h = target_orbit_h
@@ -164,7 +164,8 @@ class MAV_ascent:
                 propagation_setup.dependent_variable.single_acceleration_norm(
                     propagation_setup.acceleration.thrust_acceleration_type, self.current_name, self.current_name),
                 propagation_setup.dependent_variable.single_acceleration_norm(
-                    propagation_setup.acceleration.aerodynamic_type, self.current_name, "Mars")
+                    propagation_setup.acceleration.aerodynamic_type, self.current_name, "Mars"),
+                propagation_setup.dependent_variable.dynamic_pressure( self.current_name )
             ]
         else:
             self.dependent_variables_to_save = []
