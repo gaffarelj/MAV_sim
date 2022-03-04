@@ -50,6 +50,7 @@ class MAV_ascent:
         self.current_name = "MAV stage %i" % self.current_stage
         # Create Mars
         bodies_to_create = ["Mars"]
+        # TODO: investigate why changing reference frame orientation seems to change results (thrust orientation?)
         body_settings = environment_setup.get_default_body_settings(bodies_to_create, "Mars", "ECLIPJ2000")
         body_settings.get("Mars").atmosphere_settings = environment_setup.atmosphere.exponential_predefined("Mars")
         self.bodies = environment_setup.create_system_of_bodies(body_settings)
@@ -91,7 +92,6 @@ class MAV_ascent:
     def create_accelerations(self, only_thrust_dict=False):
         # Define thrust
         self.thrust = MAV_thrust(self, self.launch_angles[self.current_stage-1], self.thrust_models[self.current_stage-1])
-        #thrust_direction_settings = propagation_setup.thrust.custom_thrust_orientation(thrust.get_thrust_orientation)
         thrust_direction_settings = propagation_setup.thrust.custom_thrust_direction(self.thrust.get_thrust_orientation)
         thrust_magnitude_settings = propagation_setup.thrust.custom_thrust_magnitude(self.thrust.get_thrust_magnitude, self.thrust.get_specific_impulse, self.thrust.is_thrust_on)
 
@@ -202,7 +202,10 @@ class MAV_ascent:
             output_variables=self.dependent_variables_to_save
         )
         
-        mass_rate_settings = {self.current_name:[propagation_setup.mass_rate.from_thrust()]}
+        if self.thrust.thrust_type == "constant":
+            mass_rate_settings = {self.current_name:[propagation_setup.mass_rate.from_thrust()]}
+        else:
+            mass_rate_settings = {self.current_name:[propagation_setup.mass_rate.custom(self.thrust.get_mass_flow)]}
         mass_rate_models = propagation_setup.create_mass_rate_models(
             self.bodies,
             mass_rate_settings,
@@ -227,10 +230,10 @@ class MAV_ascent:
             tolerance = 1
             coefficients = propagation_setup.integrator.rkf_78
         else:
-            initial_time_step = 1.0
-            minimum_time_step = 0.0001
+            initial_time_step = 0.1
+            minimum_time_step = 1e-5
             maximum_time_step = 500
-            tolerance = 1e-14
+            tolerance = 1e-17
             coefficients = propagation_setup.integrator.rkf_78
         self.integrator_settings = propagation_setup.integrator.runge_kutta_variable_step_size(
             self.initial_epoch,
