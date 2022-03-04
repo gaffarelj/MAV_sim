@@ -15,30 +15,48 @@ from matplotlib import pyplot as plt
 from tudatpy.kernel.astro import time_conversion
 
 from setup import ascent
-# from thrust.models.multi_fin import multi_fin_SRM
+from thrust.models.multi_fin import multi_fin_SRM
 from thrust.models.rod_and_tube import rod_and_tube_SRM
+from thrust.models.spherical import spherical_SRM
 from thrust.solid_thrust import SRM_thrust
-
-# Max D=0.57m, most assumed is D=0.51m
-# SRM_stage_1 = multi_fin_SRM(R_o=0.275, R_i=0.15, N_f=12, w_f=0.0225, L_f=0.075, L=0.8)#, run_checks=False)
-SRM_stage_1 = rod_and_tube_SRM(R_o=0.28, R_mid=0.14, R_i=0.135, L=1.125)#, run_checks=False)
-SRM_thrust_model_1 = SRM_thrust(SRM_stage_1)
-# SRM_stage_1.plot_geometry()
-# print("%.2f/207 kg of propellant"%SRM_thrust_model_1.M_p, "%.2f/29 kg of innert"%SRM_thrust_model_1.M_innert)
-# plt.show()
 
 # Thrust needed:
 #  * Stage 1: ~9.75kN for 55s
 #  * Stage 2: ~6.75kN for 17s
+
+use_SRM = True
+
+# Max D=0.57m, most assumed in feasibility study was D=0.51m
+if use_SRM:
+    SRM_stage_1 = rod_and_tube_SRM(R_o=0.28, R_mid=0.185, R_i=0.075, L=1.125)
+    r_t = 0.025 # [m] throat radius
+    SRM_thrust_model_1 = SRM_thrust(SRM_stage_1, A_t=np.pi*r_t**2)
+
+    SRM_stage_2 = spherical_SRM(R_o=0.175, R_i=0.005)
+    SRM_thrust_model_2 = SRM_thrust(SRM_stage_2)
+
+    print("%.2f/207 kg of propellant"%SRM_thrust_model_1.M_p, "%.2f/29 kg of innert"%SRM_thrust_model_1.M_innert)
+    # SRM_stage_1.plot_geometry()
+    # plt.show()
+    print("%.2f/52 kg of propellant"%SRM_thrust_model_2.M_p, "%.2f/15 kg of innert"%SRM_thrust_model_2.M_innert)
+    # SRM_stage_2.plot_geometry()
+    # plt.show()
+
+    mass_1 = 125+SRM_thrust_model_1.M_innert+SRM_thrust_model_1.M_p
+    mass_2 = 30+SRM_thrust_model_2.M_innert+SRM_thrust_model_2.M_p
+else:
+    mass_1, mass_2 = 370, 95
+    SRM_thrust_model_1 = [9750, 293, 55]
+    SRM_thrust_model_2 = [6750, 282, 22]
+
 MAV_ascent = ascent.MAV_ascent(
     launch_epoch = time_conversion.julian_day_to_seconds_since_epoch(time_conversion.calendar_date_to_julian_day(datetime(2031, 2, 17))),    # MAV-­LL­-01
     launch_lat = np.deg2rad(18.85),     # MAV­-LL-­03
     launch_lon = np.deg2rad(77.52),     # MAV­-LL-­03
     launch_h = -2.5e3,                  # MAV­-LL-­04
-    mass_1 = [155+SRM_thrust_model_1.M_innert+SRM_thrust_model_1.M_p, 155+SRM_thrust_model_1.M_innert], #[370, 185],                # MAV-­VM­-03 + LS p.10 + Mars_Ascent_Vehicle_MAV_Propulsion_Subsystems_Design
-    mass_2 = [92, 40],                  # LS p.10 + Mars_Ascent_Vehicle_MAV_Propulsion_Subsystems_Design
-    launch_angles = [np.deg2rad(45), np.deg2rad(80)],   # MAV­-LL-­06 + guesstimate # angle is w.r.t vertical
-    thrust_models = [SRM_thrust_model_1, [6750, 282]],                      #[[9750, 293], [6750, 282]],         # magnitude, Isp for both stage, adapted from LS p.10
+    mass_stages = [mass_1, mass_2],            
+    launch_angles = [np.deg2rad(45), np.deg2rad(90)],       # MAV­-LL-­06 + guesstimate # angle is w.r.t vertical
+    thrust_models = [SRM_thrust_model_1, SRM_thrust_model_2],
     target_orbit_h = 300e3,             # MAV­-OSO­-01
     target_orbit_i = np.deg2rad(25),    # MAV­-OSO­-03
     max_a = 15 * 9.80665,               # MAV­-LL-­02
@@ -58,13 +76,14 @@ for stage in [1, 2]:
     environment_setup.set_aerodynamic_guidance(guidance_object, MAV_ascent.current_body, silence_warnings=True)
     MAV_ascent.create_initial_state()
     MAV_ascent.create_dependent_variables_to_save()
-    MAV_ascent.create_termination_settings(end_time=25*60)
+    MAV_ascent.create_termination_settings(end_time=160*60)
     MAV_ascent.create_propagator_settings()
-    MAV_ascent.create_integrator_settings(fixed_step=0.1)
+    MAV_ascent.create_integrator_settings(),#fixed_step=0.1)
     times, states, dep_vars = MAV_ascent.run_simulation()
     stage_res.append([times, states, dep_vars])
     final_h = dep_vars[-1,1]
-    print("Altitude at end of stage %i of %.4f km..." % (stage, final_h/1e3))
+    print("Altitude at end of stage %i at %.2f min of %.2f km, vehicle mass of %.2f kg..." % \
+        (stage, (times[-1]-MAV_ascent.launch_epoch)/60, final_h/1e3, states[-1,-1]))
     if stage == 1 and final_h < 0:
         break
 
@@ -89,59 +108,67 @@ tot_accs = dep_vars[:,6]
 mach_numbers = dep_vars[:,7]
 mass = dep_vars[:,8]
 angle_of_attacks = np.rad2deg(dep_vars[:,9])
-a_pm = dep_vars[:,13]
+a_SH = dep_vars[:,13]
 a_thrust = dep_vars[:,14]
 a_aero = dep_vars[:,15]
-
-
-X, Y, Z = dep_vars[:,10], dep_vars[:,11], dep_vars[:,12]
-
-import matplotlib.pyplot as plt
+dyna_pressures = dep_vars[:,16]
 
 if final_h < 0 or times[-1] <= 12:
     idx_crop = -1
 else:
     idx_crop = np.where(times >= 12)[0][0]
 
-plt.figure(figsize=(10, 6))
-plt.plot(times[:idx_crop], a_pm[:idx_crop], label="SH")
-plt.plot(times[:idx_crop], a_thrust[:idx_crop], label="Thrust")
-plt.plot(times[:idx_crop], a_aero[:idx_crop], label="Aero")
-plt.plot(times[:idx_crop], tot_accs[:idx_crop], label="Total", linestyle="dotted")
-plt.xlabel("Time [min]"), plt.ylabel("Acceleration [m/s$^2$]")
-plt.legend()
-plt.grid(), plt.tight_layout()
+dts = np.diff(times*60)
+print("Minimum timestep was of %.3e s, maximum of %.3e s." % (np.ma.masked_array(dts, mask=dts==0).min(), max(dts)))
 
-plt.figure(figsize=(10, 6))
-plt.plot(times, altitudes/1e3)
-plt.xlabel("Time [min]"), plt.ylabel("Altitude [km]")
-plt.grid(), plt.tight_layout()
+# Create a figure with 5 subplots: a grid of 2x2, then one horizontal one at the bottom
+fig = plt.figure(figsize=(14, 15))
+gs = fig.add_gridspec(3, 2)
+ax1 = fig.add_subplot(gs[0, 0])
+ax2 = fig.add_subplot(gs[0, 1])
+ax3 =fig.add_subplot(gs[1, 0])
+ax4 = fig.add_subplot(gs[1, 1])
+ax5 = fig.add_subplot(gs[2, :])
 
-# fig3 = plt.figure(figsize=(7, 6))
-# ax3 = fig3.add_subplot(111, projection="3d")
-# ax3.set_title(f"System state evolution in 3D")
+# Plot the altitude history
+ax1.plot(times, altitudes/1e3)
+ax1.grid()
+ax1.set_xlabel("Time since launch [min]")
+ax1.set_ylabel("Altitude [km]")
 
-# ax3.plot(X, Y, Z)
-# ax3.scatter(X[0], Y[0], Z[0])
-# ax3.scatter(0, 0, 0)
+# Plot the airspeed history
+ax2.plot(times, airspeeds)
+ax2.grid()
+ax2.set_xlabel("Time since launch [min]")
+ax2.set_ylabel("Airspeed [m/s]")
 
-# xyzlim = np.array([ax3.get_xlim3d(),ax3.get_ylim3d(),ax3.get_zlim3d()]).T
-# XYZlim = [min(xyzlim[0]),max(xyzlim[1])]
-# ax3.set_xlim3d(XYZlim)
-# ax3.set_ylim3d(XYZlim)
-# ax3.set_zlim3d(XYZlim)
+# Plot the mass history in the first 10 minutes
+ax3.plot(times[:idx_crop], mass[:idx_crop])
+ax3.grid()
+ax3.set_xlabel("Time since launch [min]")
+ax3.set_ylabel("Rocket mass [kg]")
 
-# plt.show()
+# Plot the dynamic pressure history in the first 10 minutes
+ax4.plot(times[:idx_crop], dyna_pressures[:idx_crop]/1e3)
+ax4.grid()
+ax4.set_xlabel("Time since launch [min]")
+ax4.set_ylabel("Dynamic pressure [kPa]")
 
-# plt.figure(figsize=(10, 6))
-# plt.plot(times, airspeeds)
-# plt.xlabel("Time [min]"), plt.ylabel("Airspeed [m/s]")
-# plt.grid(), plt.tight_layout()
+# Plot the accelerations history in the first 10 minutes
+ax5.plot(times[:idx_crop], tot_accs[:idx_crop], label="Total", linestyle="dotted", color="black")
+ax5.plot(times[:idx_crop], a_SH[:idx_crop], label="SH D/O 4")
+ax5.plot(times[:idx_crop], a_thrust[:idx_crop], label="Thrust")
+ax5.plot(times[:idx_crop], a_aero[:idx_crop], label="Aerodynamic")
+ax5.grid()
+ax5.set_xlabel("Time since launch [min]")
+ax5.set_ylabel("Acceleration [m/s$^2$]")
+#ax5.set_yscale("log") # (uncomment this to see the distinction between the accelerations more clearly)
+ax5.legend()
 
-plt.figure(figsize=(10, 6))
-plt.plot(times[:idx_crop], mass[:idx_crop])
-plt.xlabel("Time [min]"), plt.ylabel("Mass [kg]")
-plt.grid(), plt.tight_layout()
+# Save some space using a tight layout, and show the figure
+plt.tight_layout()
+plt.show()
+
 
 # plt.figure(figsize=(10, 6))
 # plt.plot(times[:idx_crop], force_coeffs[:,0][:idx_crop], label="CD")
@@ -166,9 +193,4 @@ plt.grid(), plt.tight_layout()
 # plt.xlabel("Time [min]"), plt.ylabel("Angle of attack [deg]")
 # plt.grid(), plt.tight_layout()
 
-# plt.figure(figsize=(10, 6))
-# plt.plot(np.sqrt((X-X[0])**2 + (Y-Y[0])**2)/1e3, altitudes/1e3)
-# plt.xlabel("X-Y [km]"), plt.ylabel("h [km]")
-# plt.grid(), plt.tight_layout()
-
-plt.show()
+# plt.show()
