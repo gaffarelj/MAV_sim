@@ -20,6 +20,7 @@ class MAV_thrust:
             self.thrust_type = "constant"
             self.magnitude = thrust_model[0]
             self.Isp = thrust_model[1]
+            self.burn_time = thrust_model[2]
         elif type(thrust_model) == SRM_thrust:
             self.thrust_type = "from_geometry"
             self.magnitude_function = thrust_model.compute_magnitude
@@ -28,22 +29,38 @@ class MAV_thrust:
             raise NotImplementedError("The thrust model `%s` does not correspond to anything implemented" % type(thrust_model))
         self.ascent_model = ascent_model
         self.coasting = False
+        self.thrust_model = thrust_model
+        self.thrust_times = []
+        self.magnitudes_history = []
 
     def is_thrust_on(self, time):
         if self.coasting:
-            return False
-        current_stage_dry_mass = self.ascent_model.stage_1_dry_mass if self.ascent_model.current_stage == 1 else self.ascent_model.stage_2_dry_mass
+            return False # Thrust is off if vehicle is coasting
+        if len(self.magnitudes_history) <= 2:
+            return True # If no coasting, compute thrust for at least two time steps
 
-        if self.ascent_model.current_body.mass > current_stage_dry_mass:
-            return True
-        else:
+        if self.thrust_type == "from_geometry":
+            thrust_on = np.sum(self.magnitudes_history[-2:]) != 0 # Do not compute thrust anymore if the magnitude from the geometry was 0 twice in a row
+            if not thrust_on:
+                print("Burnt distance:", self.thrust_model.b)
+        elif self.thrust_type == "constant":
+            time_elapsed = self.thrust_times[-1] - self.thrust_times[0] # Do not compute thrust anymore if the specified burn time has elapsed
+            thrust_on = time_elapsed < self.burn_time
+            if not thrust_on:
+                print("Time elapsed:", time_elapsed)
+        if not thrust_on: # If thrust is off, remember that we enter a coasting phase
             self.coasting = True
+            return False
+        return True
 
     def get_thrust_magnitude(self, time):
         if self.thrust_type == "constant":
-            return self.magnitude
+            _magnitude = self.magnitude
         elif self.thrust_type == "from_geometry":
-            return self.magnitude_function(time)
+            _magnitude = self.magnitude_function(time)
+        self.thrust_times.append(time)
+        self.magnitudes_history.append(_magnitude)
+        return _magnitude
 
     def get_specific_impulse(self, time):
         if self.thrust_type == "constant":
