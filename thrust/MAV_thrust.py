@@ -6,18 +6,22 @@ sys.path = [p for p in sys.path if p != ""]
 while sys.path[0].split("/")[-1] != "MAV_sim":
     sys.path.insert(0,"/".join(sys.path[0].split("/")[:-1]))
 
+# Standard imports
 import numpy as np
+from scipy.interpolate import interp1d
 
+# Tudatpy imports
 from tudatpy.kernel.numerical_simulation import environment
 
+# Custom imports
 from thrust.solid_thrust import SRM_thrust
 
 class MAV_thrust:
 
     def __init__(self, ascent_model, angle, thrust_model, body_directions=0):
         self.angle = angle
-        self.body_directions = body_directions # float or dict
         self.thrust_model = thrust_model
+
         if type(self.thrust_model) == list and type(self.thrust_model[0]) in [float, int]:
             self.thrust_type = "constant"
             self.magnitude = self.thrust_model[0]
@@ -25,14 +29,21 @@ class MAV_thrust:
             self.burn_time = self.thrust_model[2]
         elif type(self.thrust_model) == SRM_thrust:
             self.thrust_type = "from_geometry"
-            print("Pre-running SRM burn simulation...", end="\r")
+            print("Pre-simulating SRM burn...", end="\r")
             self.thrust_model.simulate_full_burn()
-            print("Pre-running SRM burn simulation finished.")
+            print("Pre-simulating SRM burn finished.")
             self.magnitude_function = self.thrust_model.magnitude_interpolator
             self.m_dot_function = self.thrust_model.m_dot_interpolator
             self.burn_time = self.thrust_model.saved_burn_times[-1]
         else:
             raise NotImplementedError("The thrust model `%s` does not correspond to anything implemented" % type(self.thrust_model))
+        
+        if type(body_directions) == list:
+            body_direction_times = np.linspace(0, self.burn_time, len(body_directions))
+            self.body_direction_function = interp1d(body_direction_times, body_directions)
+        else:
+            self.body_direction_function = lambda t: body_directions
+
         self.ascent_model = ascent_model
         self.coasting = False
         self.first_t = None
@@ -82,18 +93,16 @@ class MAV_thrust:
         else:
             raise NotImplementedError("No mass flow model has been implemented in this case.")
 
-    def get_body_fixed_thrust_direction(self, time=None):
-        if type(self.body_directions) == dict:
-            raise NotImplementedError
+    def get_body_fixed_thrust_direction(self):
+        if self.time_elapsed > self.burn_time:
+            return np.zeros((3,3))
         else:
-            side_angle = self.body_directions
-        if time is None:
-            time = self.last_t
-        return np.array([
-            [np.cos(side_angle), np.sin(side_angle), 0],
-            [np.sin(side_angle), np.cos(side_angle), 0],
-            [0, 0, 1]
-        ])
+            side_angle = self.body_direction_function(self.time_elapsed)
+            return np.array([
+                [np.cos(side_angle), np.sin(side_angle), 0],
+                [np.sin(side_angle), np.cos(side_angle), 0],
+                [0, 0, 1]
+            ])
 
     def get_thrust_orientation(self, time):
         # Get aerodynamic angle calculator
@@ -111,5 +120,5 @@ class MAV_thrust:
         thrust_inertial_frame = np.dot(vertical_to_inertial_frame,
                                     thrust_direction_vertical_frame)
         # Add contribution from the body fixed direction
-        body_fixed_direction = self.get_body_fixed_thrust_direction(time)
+        body_fixed_direction = self.get_body_fixed_thrust_direction()
         return np.dot(body_fixed_direction, thrust_inertial_frame)

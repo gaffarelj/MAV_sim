@@ -51,7 +51,10 @@ else:
     SRM_thrust_model_1 = [9750, 293, 55]
     SRM_thrust_model_2 = [6750, 282, 22]
 
-body_fixed_thrust_direction = 0.1
+body_fixed_thrust_direction = [
+    [0, 0.1, 0, -0.1, 0.2],
+    [0, 0, -0.1, 0.1, 0.2]
+]
 
 MAV_ascent = ascent.MAV_ascent(
     launch_epoch = time_conversion.julian_day_to_seconds_since_epoch(time_conversion.calendar_date_to_julian_day(datetime(2031, 2, 17))),    # MAV-­LL­-01

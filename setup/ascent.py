@@ -92,7 +92,11 @@ class MAV_ascent:
 
     def create_accelerations(self, only_thrust_dict=False):
         # Define thrust
-        self.thrust = MAV_thrust(self, self.launch_angles[self.current_stage-1], self.thrust_models[self.current_stage-1], self.body_fixed_thrust_direction)
+        self.thrust = MAV_thrust(
+            self,
+            self.launch_angles[self.current_stage-1],
+            self.thrust_models[self.current_stage-1],
+            self.body_fixed_thrust_direction[self.current_stage-1])
         thrust_direction_settings = propagation_setup.thrust.custom_thrust_direction(self.thrust.get_thrust_orientation)
         thrust_magnitude_settings = propagation_setup.thrust.custom_thrust_magnitude(
             self.thrust.get_thrust_magnitude,
