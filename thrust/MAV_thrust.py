@@ -14,8 +14,9 @@ from thrust.solid_thrust import SRM_thrust
 
 class MAV_thrust:
 
-    def __init__(self, ascent_model, angle, thrust_model):
+    def __init__(self, ascent_model, angle, thrust_model, body_directions=0):
         self.angle = angle
+        self.body_directions = body_directions # float or dict
         self.thrust_model = thrust_model
         if type(self.thrust_model) == list and type(self.thrust_model[0]) in [float, int]:
             self.thrust_type = "constant"
@@ -81,6 +82,19 @@ class MAV_thrust:
         else:
             raise NotImplementedError("No mass flow model has been implemented in this case.")
 
+    def get_body_fixed_thrust_direction(self, time=None):
+        if type(self.body_directions) == dict:
+            raise NotImplementedError
+        else:
+            side_angle = self.body_directions
+        if time is None:
+            time = self.last_t
+        return np.array([
+            [np.cos(side_angle), np.sin(side_angle), 0],
+            [np.sin(side_angle), np.cos(side_angle), 0],
+            [0, 0, 1]
+        ])
+
     def get_thrust_orientation(self, time):
         # Get aerodynamic angle calculator
         aerodynamic_angle_calculator = self.ascent_model.current_body.flight_conditions.aerodynamic_angle_calculator
@@ -96,4 +110,6 @@ class MAV_thrust:
         # Compute the thrust in the inertial frame
         thrust_inertial_frame = np.dot(vertical_to_inertial_frame,
                                     thrust_direction_vertical_frame)
-        return thrust_inertial_frame
+        # Add contribution from the body fixed direction
+        body_fixed_direction = self.get_body_fixed_thrust_direction(time)
+        return np.dot(body_fixed_direction, thrust_inertial_frame)

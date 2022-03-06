@@ -51,6 +51,8 @@ else:
     SRM_thrust_model_1 = [9750, 293, 55]
     SRM_thrust_model_2 = [6750, 282, 22]
 
+body_fixed_thrust_direction = 0.1
+
 MAV_ascent = ascent.MAV_ascent(
     launch_epoch = time_conversion.julian_day_to_seconds_since_epoch(time_conversion.calendar_date_to_julian_day(datetime(2031, 2, 17))),    # MAV-­LL­-01
     launch_lat = np.deg2rad(18.85),     # MAV­-LL-­03
@@ -62,7 +64,8 @@ MAV_ascent = ascent.MAV_ascent(
     target_orbit_h = 300e3,             # MAV­-OSO­-01
     target_orbit_i = np.deg2rad(25),    # MAV­-OSO­-03
     max_a = 15 * 9.80665,               # MAV­-LL-­02
-    max_AoA = np.deg2rad(4)             # MAV­-LL-­05
+    max_AoA = np.deg2rad(4),             # MAV­-LL-­05
+    body_fixed_thrust_direction=body_fixed_thrust_direction
 )
 
 from tudatpy.kernel.numerical_simulation import environment_setup

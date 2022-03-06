@@ -31,7 +31,7 @@ class FakeAeroGuidance(propagation.AerodynamicGuidance):
 class MAV_ascent:
 
     def __init__(self, launch_epoch, launch_lat, launch_lon, launch_h, mass_stages, \
-        launch_angles, thrust_models, target_orbit_h, target_orbit_i, max_a, max_AoA):
+        launch_angles, thrust_models, target_orbit_h, target_orbit_i, max_a, max_AoA, body_fixed_thrust_direction):
         self.launch_epoch = launch_epoch
         self.launch_lat, self.launch_lon = launch_lat, launch_lon
         self.launch_h = launch_h
@@ -44,6 +44,7 @@ class MAV_ascent:
         self.max_acceleration = max_a
         self.max_angle_of_attack = max_AoA
         self.last_h = -np.inf
+        self.body_fixed_thrust_direction = body_fixed_thrust_direction
 
     def create_bodies(self, stage, include_aero=True):
         self.current_stage = stage
@@ -91,9 +92,12 @@ class MAV_ascent:
 
     def create_accelerations(self, only_thrust_dict=False):
         # Define thrust
-        self.thrust = MAV_thrust(self, self.launch_angles[self.current_stage-1], self.thrust_models[self.current_stage-1])
+        self.thrust = MAV_thrust(self, self.launch_angles[self.current_stage-1], self.thrust_models[self.current_stage-1], self.body_fixed_thrust_direction)
         thrust_direction_settings = propagation_setup.thrust.custom_thrust_direction(self.thrust.get_thrust_orientation)
-        thrust_magnitude_settings = propagation_setup.thrust.custom_thrust_magnitude(self.thrust.get_thrust_magnitude, self.thrust.get_specific_impulse, self.thrust.is_thrust_on)
+        thrust_magnitude_settings = propagation_setup.thrust.custom_thrust_magnitude(
+            self.thrust.get_thrust_magnitude,
+            self.thrust.get_specific_impulse,
+            self.thrust.is_thrust_on)
 
         if only_thrust_dict:
             accelerations_on_vehicle = {
