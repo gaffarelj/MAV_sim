@@ -47,10 +47,11 @@ class anchor_SRM:
     def get_V_p(self):
         # Return the propellant volume
         A1 = 0.5*(np.pi/self.N_a - np.arcsin(self.delta_s/(2*self.R_i))) * self.R_i**2
-        A2 = (self.R_i+2*self.w)/2*np.sin( np.arcsin(self.delta_s/(2*self.R_i)) - np.arcsin(self.delta_s/2 / (self.R_i+2*self.w)) )
+        A2 = ((self.R_i+2*self.w)*self.R_i)/2*np.sin( np.arcsin(self.delta_s/(2*self.R_i)) - np.arcsin(self.delta_s/2 / (self.R_i+2*self.w)) )
         A3 = 0.5*np.arcsin(self.delta_s/(2*self.R_i+2*self.w))*(self.R_i+2*self.w)**2
         A4 = 0.5*(np.pi/self.N_a - np.arcsin((self.w+self.r_f)/(self.R_i+2*self.w+self.r_f))) * ((self.R_o-self.w)**2-(self.R_i+2*self.w)**2)
-        A5 = 0.5*(np.arcsin((self.w+self.r_f)/(self.R_i+2*self.w+self.r_f)) - np.arcsin((self.w+self.r_f)/(self.R_o-self.w-self.r_f))) * (self.R_o-self.w)**2
+        A5 = 0.5*(np.arcsin((self.w+self.r_f)/(self.R_i+2*self.w+self.r_f)) - np.arcsin((self.w+self.r_f)/(self.R_o-self.w-self.r_f))) * (self.R_o-self.w)**2 - \
+            0.5 * (self.R_o-self.w-self.r_f)*(self.R_i+2*self.w+self.r_f) * np.sin( np.arcsin((self.w+self.r_f)/(self.R_i+2*self.w+self.r_f)) - np.arcsin( (self.w+self.r_f)/(self.R_o-self.w-self.r_f)) )
         A6 = 0.5*np.arccos((self.w+self.r_f)/(self.R_i+2*self.w+self.r_f))*self.r_f**2+self.r_f*(np.sqrt((self.R_o-self.w-self.r_f)**2-(self.w+self.r_f)**2) - np.sqrt((self.R_i+2*self.w+self.r_f)**2-(self.w+self.r_f)**2))
         A7 = 0.5 * (np.pi/2 + np.arcsin((self.w+self.r_f)/(self.R_o-self.w-self.r_f)))*self.r_f**2
         return (np.pi * self.R_o**2 - 2 * self.N_a * (A1+A2+A3+A4+A5+A6+A7) ) * self.L
