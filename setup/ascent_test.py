@@ -14,7 +14,7 @@ from matplotlib import pyplot as plt
 # Tudatpy imports
 from tudatpy.kernel.astro import time_conversion
 
-from setup import ascent
+from setup import ascent_framework
 from thrust.models.multi_fin import multi_fin_SRM
 # from thrust.models.rod_and_tube import rod_and_tube_SRM
 # from thrust.models.anchor import anchor_SRM
@@ -56,7 +56,7 @@ body_fixed_thrust_direction = [
     [0, 0, -0.1, 0.1, 0.2]
 ]
 
-MAV_ascent = ascent.MAV_ascent(
+MAV_ascent = ascent_framework.MAV_ascent(
     launch_epoch = time_conversion.julian_day_to_seconds_since_epoch(time_conversion.calendar_date_to_julian_day(datetime(2031, 2, 17))),    # MAV-­LL­-01
     launch_lat = np.deg2rad(18.85),     # MAV­-LL-­03
     launch_lon = np.deg2rad(77.52),     # MAV­-LL-­03
@@ -80,7 +80,7 @@ for stage in [1, 2]:
     print("Running the simulation for stage %i" % stage)
     MAV_ascent.create_bodies(stage=stage)
     MAV_ascent.create_accelerations()
-    guidance_object = ascent.FakeAeroGuidance()
+    guidance_object = ascent_framework.FakeAeroGuidance()
     environment_setup.set_aerodynamic_guidance(guidance_object, MAV_ascent.current_body, silence_warnings=True)
     MAV_ascent.create_initial_state()
     MAV_ascent.create_dependent_variables_to_save()
