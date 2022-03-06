@@ -16,7 +16,8 @@ from tudatpy.kernel.astro import time_conversion
 
 from setup import ascent
 from thrust.models.multi_fin import multi_fin_SRM
-from thrust.models.rod_and_tube import rod_and_tube_SRM
+# from thrust.models.rod_and_tube import rod_and_tube_SRM
+# from thrust.models.anchor import anchor_SRM
 from thrust.models.spherical import spherical_SRM
 from thrust.solid_thrust import SRM_thrust
 
@@ -28,17 +29,18 @@ use_SRM = True
 
 # Max D=0.57m, most assumed in feasibility study was D=0.51m
 if use_SRM:
-    SRM_stage_1 = rod_and_tube_SRM(R_o=0.28, R_mid=0.185, R_i=0.075, L=1.125)
-    r_t = 0.025 # [m] throat radius
-    SRM_thrust_model_1 = SRM_thrust(SRM_stage_1, A_t=np.pi*r_t**2)
+    # SRM_stage_1 = rod_and_tube_SRM(R_o=0.24, R_mid=0.19, R_i=0.075, L=1.05)
+    SRM_stage_1 = multi_fin_SRM(R_o=0.24, R_i=0.175, N_f=20, w_f=0.02, L_f=0.05, L=1.05)
+    # SRM_stage_1 = anchor_SRM(R_o=0.24, R_i=0.165, N_a=4, w=0.015, r_f=0.005, delta_s=0.015, L=1.05)
+    SRM_thrust_model_1 = SRM_thrust(SRM_stage_1)
 
-    SRM_stage_2 = spherical_SRM(R_o=0.175, R_i=0.005)
+    SRM_stage_2 = spherical_SRM(R_o=0.175, R_i=0.095)
     SRM_thrust_model_2 = SRM_thrust(SRM_stage_2)
 
-    print("%.2f/207 kg of propellant"%SRM_thrust_model_1.M_p, "%.2f/29 kg of innert"%SRM_thrust_model_1.M_innert)
+    # print("%.2f/207 kg of propellant"%SRM_thrust_model_1.M_p, "%.2f/29 kg of innert"%SRM_thrust_model_1.M_innert)
     # SRM_stage_1.plot_geometry()
     # plt.show()
-    print("%.2f/52 kg of propellant"%SRM_thrust_model_2.M_p, "%.2f/15 kg of innert"%SRM_thrust_model_2.M_innert)
+    # print("%.2f/52 kg of propellant"%SRM_thrust_model_2.M_p, "%.2f/15 kg of innert"%SRM_thrust_model_2.M_innert)
     # SRM_stage_2.plot_geometry()
     # plt.show()
 
@@ -113,10 +115,10 @@ a_thrust = dep_vars[:,14]
 a_aero = dep_vars[:,15]
 dyna_pressures = dep_vars[:,16]
 
-if final_h < 0 or times[-1] <= 12:
+try:
+    idx_crop = np.where(times >= 15)[0][0]
+except IndexError:
     idx_crop = -1
-else:
-    idx_crop = np.where(times >= 12)[0][0]
 
 dts = np.diff(times*60)
 print("Minimum timestep was of %.3e s, maximum of %.3e s." % (np.ma.masked_array(dts, mask=dts==0).min(), max(dts)))

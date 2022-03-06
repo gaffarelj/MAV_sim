@@ -75,16 +75,13 @@ multi_fin_test = multi_fin_SRM(R_o=1, R_i=0.65, N_f=8, w_f=0.15, L_f=0.3, L=3, r
 from models.anchor import anchor_SRM
 anchor_test = anchor_SRM(R_o=1, R_i=0.25, N_a=3, w=0.2, r_f=0.05, delta_s=0.15, L=3, run_checks=False)
 from models.spherical import spherical_SRM
-spherical_test = spherical_SRM(R_o=1, R_i=0.5, run_checks=False)
+spherical_test = spherical_SRM(R_o=0.175, R_i=0.095, run_checks=False)
 
 STAR_20 = multi_fin_SRM(R_o=0.24, R_i=0.125, N_f=10, w_f=0.025, L_f=0.05, L=1.0, run_checks=False)
 
-STAR_20_thrust_model = SRM_thrust(STAR_20)
-if print_and_show_analysis:
-    print("%.2f/272.88 kg of propellant"%STAR_20_thrust_model.M_p, "%.2f/29 kg of innert mass"%STAR_20_thrust_model.M_innert)
-
-#stage_test = multi_fin_SRM(R_o=0.275, R_i=0.15, N_f=12, w_f=0.0225, L_f=0.075, L=1.125, run_checks=False)
-stage_test = rod_and_tube_SRM(R_o=0.28, R_mid=0.14, R_i=0.135, L=1.125, run_checks=False)
+stage_test = multi_fin_SRM(R_o=0.24, R_i=0.175, N_f=20, w_f=0.02, L_f=0.05, L=1.05, run_checks=False)
+# stage_test = rod_and_tube_SRM(R_o=0.24, R_mid=0.19, R_i=0.075, L=1.05, run_checks=False)
+# stage_test = anchor_SRM(R_o=0.24, R_i=0.075, N_a=3, w=0.05, r_f=0.005, delta_s=0.035, L=1.05)
 
 geometries = [tubular_test, rod_and_tube_test, multi_fin_test, anchor_test, spherical_test, STAR_20, stage_test]
 
@@ -96,6 +93,8 @@ for i, (name, to_plot) in enumerate(geometries_to_plot.items()):
         # Compute the thrust over time
         print("Computing thrust over time for the %s SRM geometry..." % name.replace("_", " "))
         SRM_thrust_model = SRM_thrust(SRM_geometry)
+        if print_and_show_analysis:
+            print("%.2f kg of propellant"%SRM_thrust_model.M_p, "%.2f kg of innert mass"%SRM_thrust_model.M_innert)
         burn_times, magnitudes, b_s, p_c_s, M_p_s = SRM_thrust_model.simulate_full_burn()
 
         if print_and_show_analysis:

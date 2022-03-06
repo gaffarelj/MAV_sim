@@ -23,10 +23,10 @@ class SRM_thrust:
         epsilon=50.2,   # [-] area ratio (exhaust/throat)
         T_c=3645,       # [K] chamber temperature (https://ieeexplore-ieee-org.tudelft.idm.oclc.org/document/8742205)
         p_a=650,        # [Pa] ambient pressure (650Pa = "Sea level" on Mars)
-        a=0.004202,     # [m/s/MPa] burning rate coefficient (to use with pressure in MPa)
+        a=0.0035,#0.004202,     # [m/s/MPa] burning rate coefficient (to use with pressure in MPa)
         n=0.31,         # [-] burning rate exponent (to use with pressure in MPa)
         rho_p=1854.5,   # [kg/m3] propellant density
-        M=0.028,#0.4785598,    # [kg/mol] propellant molar mass
+        M=0.029841,     # [kg/mol] propellant molar mass # Air Launch versus Ground Launch: a Multidisciplinary Design Optimization Study of Expendable Launch Vehicles on Cost and Performance
         gamma=1.175,    # [-] specific heat ratio of the propellant
         eta_Isp=0.95,   # [-] Specific impulse efficiency
         eta_c=0.93,     # [-] Combustion efficiency
@@ -73,8 +73,7 @@ class SRM_thrust:
         # Initial assumptions
         self.r = 1e-9       # [m/s] initial regression rate, close to 0
         self.b = 0          # [m] burnt thickness
-        self.S = 0          # [m2] burning surface
-
+        self.S = self.geometry_model.burning_S(0)          # [m2] burning surface
         self.m_dot = None
         self.last_t = None          # [s] last function call time
         self.saved_burn_times = []
@@ -99,7 +98,10 @@ class SRM_thrust:
         else:
             dt = time - self.last_t
         self.last_t = time
+
+        # old_b = self.b
         self.b = self.b + self.r * dt
+        # db = self.b - old_b
 
         # Get the current burning surface
         try:
@@ -114,6 +116,7 @@ class SRM_thrust:
         else:
             # Compute propulsion characteristics at this time step
             self.m_dot = self.S * self.r * self.rho_p                               # [kg/s] mass flow
+            # self.m_dot = db * self.S * self.rho_p / dt
             self.p_c = fsolve(self.solve_p_c, 1e5)[0]                               # [Pa] combustion chamber pressure
             self.p_e = fsolve(self.solve_p_e, self.p_c/1000)[0]                     # [Pa] exhaust pressure
             self.V_e = np.sqrt(2*self.gamma/(self.gamma-1) * self.R_A/self.M * self.T_c * (1-(self.p_e/self.p_c)**((self.gamma-1)/self.gamma)))   # [m/s] exhaust velocity

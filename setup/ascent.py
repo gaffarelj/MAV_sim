@@ -231,7 +231,7 @@ class MAV_ascent:
             coefficients = propagation_setup.integrator.rkf_78
         else:
             initial_time_step = 0.1
-            minimum_time_step = 1e-5
+            minimum_time_step = 1e-6
             maximum_time_step = 500
             tolerance = 1e-17
             coefficients = propagation_setup.integrator.rkf_78
