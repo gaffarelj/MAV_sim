@@ -13,7 +13,7 @@ from tudatpy.kernel.numerical_simulation import environment, environment_setup
 from tudatpy.kernel.numerical_simulation import propagation, propagation_setup
 from tudatpy.util import result2array
 
-from setup.thrust import MAV_thrust
+from thrust.MAV_fixed_direction import MAV_thrust
 
 # Load the SPICE kernel
 spice_interface.load_standard_kernels()
