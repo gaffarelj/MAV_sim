@@ -12,6 +12,7 @@ from tudatpy.kernel.interface import spice_interface
 from tudatpy.kernel.numerical_simulation import environment, environment_setup
 from tudatpy.kernel.numerical_simulation import propagation, propagation_setup
 from tudatpy.util import result2array
+from tudatpy.kernel.math import root_finders
 
 from thrust.MAV_thrust import MAV_thrust
 
@@ -52,7 +53,7 @@ class MAV_ascent:
         # Create Mars
         bodies_to_create = ["Mars"]
         # TODO: investigate why changing reference frame orientation seems to change results (thrust orientation?)
-        body_settings = environment_setup.get_default_body_settings(bodies_to_create, "Mars", "ECLIPJ2000")
+        body_settings = environment_setup.get_default_body_settings(bodies_to_create, "Mars", "IAU_Mars")
         body_settings.get("Mars").atmosphere_settings = environment_setup.atmosphere.exponential_predefined("Mars")
         self.bodies = environment_setup.create_system_of_bodies(body_settings)
         self.central_bodies = ["Mars"]
@@ -173,27 +174,53 @@ class MAV_ascent:
                     propagation_setup.acceleration.thrust_acceleration_type, self.current_name, self.current_name),
                 propagation_setup.dependent_variable.single_acceleration_norm(
                     propagation_setup.acceleration.aerodynamic_type, self.current_name, "Mars"),
-                propagation_setup.dependent_variable.dynamic_pressure( self.current_name )
+                propagation_setup.dependent_variable.dynamic_pressure( self.current_name ),
+                propagation_setup.dependent_variable.relative_velocity(self.current_name, "Mars"),
+                propagation_setup.dependent_variable.single_acceleration(
+                    propagation_setup.acceleration.thrust_acceleration_type, self.current_name, self.current_name)
             ]
         else:
             self.dependent_variables_to_save = []
 
     def create_termination_settings(self, end_time=200*60):
 
-        def is_vehicle_falling(_time):
-            dh = self.current_body.flight_conditions.altitude - self.last_h
-            self.last_h = self.current_body.flight_conditions.altitude
-            return dh < 0
+        # def is_vehicle_falling(_time):
+        #     dh = self.current_body.flight_conditions.altitude - self.last_h
+        #     self.last_h = self.current_body.flight_conditions.altitude
+        #     position = self.current_body.position
+        #     velocity = self.current_body.velocity
+        #     unit_vector_pos = position / np.linalg.norm(position)
+        #     unit_vector_vel = velocity / np.linalg.norm(velocity)
+        #     dot_product = np.dot(unit_vector_vel, unit_vector_pos)
+        #     angle = np.pi/2-np.arccos(dot_product)
+        #     # print(dh, np.rad2deg(angle))
+        #     # if dh < 0:
+        #     #     input()
+        #     return np.rad2deg(angle) < 2# and self.last_h > 1e3
+        #     return dh < 0
 
-        termination_min_altitude_settings = propagation_setup.propagator.dependent_variable_termination(
-            dependent_variable_settings=propagation_setup.dependent_variable.altitude(self.current_name, "Mars"),
-            limit_value=-10e3,
-            use_as_lower_limit=True)
         if self.current_stage == 1:
-            termination_apogee_settings = propagation_setup.propagator.custom_termination(is_vehicle_falling)
+            termination_min_altitude_settings = propagation_setup.propagator.dependent_variable_termination(
+                dependent_variable_settings=propagation_setup.dependent_variable.altitude(self.current_name, "Mars"),
+                limit_value=-10e3,
+                use_as_lower_limit=True)
+            # termination_apogee_settings = propagation_setup.propagator.custom_termination(is_vehicle_falling)
+            termination_apogee_settings = propagation_setup.propagator.dependent_variable_termination(
+                dependent_variable_settings=propagation_setup.dependent_variable.flight_path_angle(self.current_name, "Mars"),
+                limit_value=0,
+                use_as_lower_limit=True,
+                terminate_exactly_on_final_condition=True,
+                termination_root_finder_settings=root_finders.secant(
+                    maximum_iteration=5,
+                    maximum_iteration_handling=root_finders.MaximumIterationHandling.accept_result)
+                )
             self.combined_termination_settings = propagation_setup.propagator.hybrid_termination(
             [termination_apogee_settings, termination_min_altitude_settings], fulfill_single_condition=True)
         else:
+            termination_min_altitude_settings = propagation_setup.propagator.dependent_variable_termination(
+                dependent_variable_settings=propagation_setup.dependent_variable.altitude(self.current_name, "Mars"),
+                limit_value=50e3,
+                use_as_lower_limit=True)
             termination_max_time_settings = propagation_setup.propagator.time_termination(self.initial_epoch + end_time)
             self.combined_termination_settings = propagation_setup.propagator.hybrid_termination(
             [termination_max_time_settings, termination_min_altitude_settings], fulfill_single_condition=True)
@@ -238,10 +265,10 @@ class MAV_ascent:
             tolerance = 1
             coefficients = propagation_setup.integrator.rkf_78
         else:
-            initial_time_step = 0.1
+            initial_time_step = 1e-2
             minimum_time_step = 1e-6
             maximum_time_step = 500
-            tolerance = 1e-17
+            tolerance = 5e-18
             coefficients = propagation_setup.integrator.rkf_78
         self.integrator_settings = propagation_setup.integrator.runge_kutta_variable_step_size(
             self.initial_epoch,
@@ -254,7 +281,11 @@ class MAV_ascent:
 
     def run_simulation(self, return_raw=False, return_count=False):
         dynamics_simulator = numerical_simulation.SingleArcSimulator(
-            self.bodies, self.integrator_settings, self.propagator_settings, print_dependent_variable_data=False
+            self.bodies,
+            self.integrator_settings,
+            self.propagator_settings,
+            print_dependent_variable_data=False,
+            print_state_data=False
         )
 
         raw_states, raw_dep_vars = dynamics_simulator.state_history, dynamics_simulator.dependent_variable_history

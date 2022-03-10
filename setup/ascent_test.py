@@ -13,6 +13,7 @@ from matplotlib import pyplot as plt
 
 # Tudatpy imports
 from tudatpy.kernel.astro import time_conversion
+from tudatpy.kernel.numerical_simulation import environment_setup
 
 from setup import ascent_framework
 from thrust.models.multi_fin import multi_fin_SRM
@@ -21,22 +22,17 @@ from thrust.models.multi_fin import multi_fin_SRM
 from thrust.models.spherical import spherical_SRM
 from thrust.solid_thrust import SRM_thrust
 
-# Thrust needed:
-#  * Stage 1: ~9.75kN for 55s
-#  * Stage 2: ~6.75kN for 17s
-
-use_SRM = True
+use_SRM = False
 
 # Max D=0.57m, most assumed in feasibility study was D=0.51m
 if use_SRM:
     # SRM_stage_1 = rod_and_tube_SRM(R_o=0.24, R_mid=0.19, R_i=0.075, L=1.05)
     SRM_stage_1 = multi_fin_SRM(R_o=0.24, R_i=0.175, N_f=20, w_f=0.02, L_f=0.05, L=1.05)
     # SRM_stage_1 = anchor_SRM(R_o=0.24, R_i=0.165, N_a=4, w=0.015, r_f=0.005, delta_s=0.015, L=1.05)
-    SRM_thrust_model_1 = SRM_thrust(SRM_stage_1)
+    SRM_thrust_model_1 = SRM_thrust(SRM_stage_1, A_t=0.075, epsilon=45)
 
-    SRM_stage_2 = spherical_SRM(R_o=0.175, R_i=0.095)
-    SRM_thrust_model_2 = SRM_thrust(SRM_stage_2)
-
+    SRM_stage_2 = spherical_SRM(R_o=0.175, R_i=0.025)
+    SRM_thrust_model_2 = SRM_thrust(SRM_stage_2, A_t=0.045, epsilon=73)
     # print("%.2f/207 kg of propellant"%SRM_thrust_model_1.M_p, "%.2f/29 kg of innert"%SRM_thrust_model_1.M_innert)
     # SRM_stage_1.plot_geometry()
     # plt.show()
@@ -44,16 +40,18 @@ if use_SRM:
     # SRM_stage_2.plot_geometry()
     # plt.show()
 
-    mass_1 = 125+SRM_thrust_model_1.M_innert+SRM_thrust_model_1.M_p
-    mass_2 = 30+SRM_thrust_model_2.M_innert+SRM_thrust_model_2.M_p
+    mass_2 = 25+SRM_thrust_model_2.M_innert+SRM_thrust_model_2.M_p
+    mass_1 = 20+mass_2+SRM_thrust_model_1.M_innert+SRM_thrust_model_1.M_p
+    print("Rocket mass of %.2f kg for section 1, %.2f kg for section 2." % (mass_1, mass_2))
 else:
     mass_1, mass_2 = 370, 95
-    SRM_thrust_model_1 = [9750, 293, 55]
-    SRM_thrust_model_2 = [6750, 282, 22]
+    # Magnitude, Isp, burn time
+    SRM_thrust_model_1 = [14.0e3, 291, 45]  # Total impulse of 630e3 Ns
+    SRM_thrust_model_2 = [4.2e3, 282, 24.5] # Total impulse of 102.9e3 Ns
 
 body_fixed_thrust_direction = [
-    [0, 0.1, 0, -0.1, 0.2],
-    [0, 0, -0.1, 0.1, 0.2]
+    [0, 0.05, 0.1, 0, 0.05],
+    [0, 0, -0.05, -0.1, -0.1]
 ]
 
 MAV_ascent = ascent_framework.MAV_ascent(
@@ -62,17 +60,14 @@ MAV_ascent = ascent_framework.MAV_ascent(
     launch_lon = np.deg2rad(77.52),     # MAV­-LL-­03
     launch_h = -2.5e3,                  # MAV­-LL-­04
     mass_stages = [mass_1, mass_2],            
-    launch_angles = [np.deg2rad(45), np.deg2rad(90)],       # MAV­-LL-­06 + guesstimate # angle is w.r.t vertical
+    launch_angles = [np.deg2rad(57.5), np.deg2rad(90)],       # MAV­-LL-­06 + guesstimate # angle is w.r.t vertical
     thrust_models = [SRM_thrust_model_1, SRM_thrust_model_2],
     target_orbit_h = 300e3,             # MAV­-OSO­-01
     target_orbit_i = np.deg2rad(25),    # MAV­-OSO­-03
     max_a = 15 * 9.80665,               # MAV­-LL-­02
-    max_AoA = np.deg2rad(4),             # MAV­-LL-­05
+    max_AoA = np.deg2rad(4),            # MAV­-LL-­05
     body_fixed_thrust_direction=body_fixed_thrust_direction
 )
-
-from tudatpy.kernel.numerical_simulation import environment_setup
-
 
 # Setup and run simulation for stage 1
 stage_res = []
@@ -90,10 +85,16 @@ for stage in [1, 2]:
     times, states, dep_vars = MAV_ascent.run_simulation()
     stage_res.append([times, states, dep_vars])
     final_h = dep_vars[-1,1]
-    print("Altitude at end of stage %i at %.2f min of %.2f km, vehicle mass of %.2f kg..." % \
-        (stage, (times[-1]-MAV_ascent.launch_epoch)/60, final_h/1e3, states[-1,-1]))
-    if stage == 1 and final_h < 0:
-        break
+    print("Altitude at end of stage %i at %.2f min of %.2f km, at %.2f km/s, vehicle mass of %.2f kg..." % \
+        (stage, (times[-1]-MAV_ascent.launch_epoch)/60, final_h/1e3, dep_vars[-1,5]/1e3, states[-1,-1]))
+    if stage == 1:
+        t_b_1 = MAV_ascent.thrust.burn_time
+        t_sep = times[-1]-MAV_ascent.launch_epoch
+        idx_sep = len(times)-1
+        if final_h < 0:
+            break
+    else:
+        t_b_2 = MAV_ascent.thrust.burn_time
 
 if stage == 1:
     # Extract results from first propagation only if stage 2 was not used
@@ -116,18 +117,32 @@ tot_accs = dep_vars[:,6]
 mach_numbers = dep_vars[:,7]
 mass = dep_vars[:,8]
 angle_of_attacks = np.rad2deg(dep_vars[:,9])
+positions = dep_vars[:,10:13]
 a_SH = dep_vars[:,13]
 a_thrust = dep_vars[:,14]
 a_aero = dep_vars[:,15]
 dyna_pressures = dep_vars[:,16]
+velocities = dep_vars[:,17:20]
+full_a_thrust = dep_vars[:,20:23]
 
 try:
-    idx_crop = np.where(times >= 15)[0][0]
+    idx_crop = np.where(times >= t_sep/60+3)[0][0]
 except IndexError:
     idx_crop = -1
 
 dts = np.diff(times*60)
 print("Minimum timestep was of %.3e s, maximum of %.3e s." % (np.ma.masked_array(dts, mask=dts==0).min(), max(dts)))
+
+fig = plt.figure(figsize=(7, 6))
+ax = fig.add_subplot(111, projection="3d")
+ax.scatter(*positions[:idx_crop].T, color="C0", alpha=0.25)
+ax.scatter(*positions[0].T, color="C2")
+ax.scatter(*positions[idx_sep].T, color="C4")
+for i, position in enumerate(positions[:idx_crop]):
+    ax.plot(*np.array([position, position+velocities[i]*2.5e2]).T, color="C1", alpha=0.25)
+    ax.plot(*np.array([position, position+full_a_thrust[i]*5e3]).T, color="C3", alpha=0.25)
+ax.set_xlabel("x"), ax.set_ylabel("y"), ax.set_zlabel("z")
+plt.show()
 
 # Create a figure with 5 subplots: a grid of 2x2, then one horizontal one at the bottom
 fig = plt.figure(figsize=(14, 15))
@@ -158,6 +173,12 @@ ax3.set_ylabel("Rocket mass [kg]")
 
 # Plot the dynamic pressure history in the first 10 minutes
 ax4.plot(times[:idx_crop], dyna_pressures[:idx_crop]/1e3)
+ymin, ymax = ax4.get_ylim()
+xmin, xmax = ax4.get_xlim()
+ax4.vlines(t_b_1/60, -1e3, ymax*1e3, color="k", linestyle="dotted")
+ax4.hlines(3.5, -1e3, xmax*1e3, color="red", linestyle="dotted")
+ax4.set_xlim(xmin, xmax)
+ax4.set_ylim(ymin, ymax)
 ax4.grid()
 ax4.set_xlabel("Time since launch [min]")
 ax4.set_ylabel("Dynamic pressure [kPa]")

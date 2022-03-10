@@ -1,6 +1,4 @@
 import sys
-# Add tudatpy path
-sys.path.append("/mnt/c/TUDAT/tudat-bundle/build/tudatpy")
 # Set path to uppermost project level
 sys.path = [p for p in sys.path if p != ""]
 while sys.path[0].split("/")[-1] != "MAV_sim":
@@ -112,6 +110,7 @@ class MAV_thrust:
         ###
         # Set thrust in vertical frame and transpose it
         thrust_direction_vertical_frame = np.array([[0, np.sin(self.angle), - np.cos(self.angle)]]).T
+        thrust_direction_vertical_frame = thrust_direction_vertical_frame / np.linalg.norm(thrust_direction_vertical_frame)
         # Retrieve rotation matrix from vertical to inertial frame from the aerodynamic angle calculator
         vertical_to_inertial_frame = aerodynamic_angle_calculator.get_rotation_matrix_between_frames(
             environment.AerodynamicsReferenceFrames.vertical_frame,
@@ -121,4 +120,5 @@ class MAV_thrust:
                                     thrust_direction_vertical_frame)
         # Add contribution from the body fixed direction
         body_fixed_direction = self.get_body_fixed_thrust_direction()
-        return np.dot(body_fixed_direction, thrust_inertial_frame)
+        thrust_orientation = np.dot(body_fixed_direction, thrust_inertial_frame)
+        return thrust_orientation
