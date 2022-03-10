@@ -22,12 +22,12 @@ class SRM_thrust:
         A_t=0.0019635,  # [m2] throat area
         epsilon=50.2,   # [-] area ratio (exhaust/throat)
         T_c=3645,       # [K] chamber temperature (https://ieeexplore-ieee-org.tudelft.idm.oclc.org/document/8742205)
-        p_a=650,        # [Pa] ambient pressure (650Pa = "Sea level" on Mars)
-        a=0.0035,#0.004202,     # [m/s/MPa] burning rate coefficient (to use with pressure in MPa)
+        p_a=650*0.4,    # [Pa] ambient pressure (650Pa = "Sea level" on Mars)
+        a=0.004202,     # [m/s/MPa] burning rate coefficient (to use with pressure in MPa)
         n=0.31,         # [-] burning rate exponent (to use with pressure in MPa)
         rho_p=1854.5,   # [kg/m3] propellant density
-        M=0.029841,     # [kg/mol] propellant molar mass # Air Launch versus Ground Launch: a Multidisciplinary Design Optimization Study of Expendable Launch Vehicles on Cost and Performance
-        gamma=1.175,    # [-] specific heat ratio of the propellant
+        M=0.02414,      # [kg/mol] propellant molar mass FROM CEA # Air Launch versus Ground Launch: a Multidisciplinary Design Optimization Study of Expendable Launch Vehicles on Cost and Performance
+        gamma=1.125,    # [-] specific heat ratio of the propellant FROM CEA
         eta_Isp=0.95,   # [-] Specific impulse efficiency
         eta_c=0.93,     # [-] Combustion efficiency
         eta_F_T=0.95):  # [-] Thrust efficiency
@@ -42,10 +42,11 @@ class SRM_thrust:
         # REF: p.12 of http://31.186.81.235:8080/api/files/view/38619.pdf
         self.a = a              
         self.n = n              
-        # Molar mass of HTPB: 2.8 kg/mol (https://www.crayvalley.com/docs/default-source/tds/poly-bd-r-45htlo.pdf?sfvrsn=3cdb46f5_6)
+        # Molar mass of HTPB: 0.0028 kg/mol (https://www.crayvalley.com/docs/default-source/tds/poly-bd-r-45htlo.pdf?sfvrsn=3cdb46f5_6)
         # Molar mass of Al: 0.02698 kg/mol
         # Molar mass of Ammonium perchlorate: 0.11749 kg/mol
-        self.M = M          # = 0.16*0.02698+0.7*0.11749+0.14*2.8
+        # 70% AP (NH4CLO4) + 16% Al + 14% HTPB
+        self.M = M          # = 0.16*0.02698+0.7*0.11749+0.14*0.0028
         self.R_A = 8.314    # [J/mol/K] gas constant
         # 1749 kg/m3 for TP-H-3062 in DAMNOGLYOXIME AND DAMNOFURAZAN IN PROPELLANTS BASED ON AMMONUMPERCHLORATE
         # Mars Ascent Vehicle—Propellant Aging: TP-H-3544 has higher density than TP-H-3062

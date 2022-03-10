@@ -22,17 +22,17 @@ from thrust.models.multi_fin import multi_fin_SRM
 from thrust.models.spherical import spherical_SRM
 from thrust.solid_thrust import SRM_thrust
 
-use_SRM = False
+use_SRM = True
 
 # Max D=0.57m, most assumed in feasibility study was D=0.51m
 if use_SRM:
     # SRM_stage_1 = rod_and_tube_SRM(R_o=0.24, R_mid=0.19, R_i=0.075, L=1.05)
-    SRM_stage_1 = multi_fin_SRM(R_o=0.24, R_i=0.175, N_f=20, w_f=0.02, L_f=0.05, L=1.05)
+    SRM_stage_1 = multi_fin_SRM(R_o=0.24, R_i=0.1725, N_f=20, w_f=0.02, L_f=0.05, L=1.05)
     # SRM_stage_1 = anchor_SRM(R_o=0.24, R_i=0.165, N_a=4, w=0.015, r_f=0.005, delta_s=0.015, L=1.05)
-    SRM_thrust_model_1 = SRM_thrust(SRM_stage_1, A_t=0.075, epsilon=45)
+    SRM_thrust_model_1 = SRM_thrust(SRM_stage_1, A_t=0.065, epsilon=45)
 
-    SRM_stage_2 = spherical_SRM(R_o=0.175, R_i=0.025)
-    SRM_thrust_model_2 = SRM_thrust(SRM_stage_2, A_t=0.045, epsilon=73)
+    SRM_stage_2 = spherical_SRM(R_o=0.175, R_i=0.115)
+    SRM_thrust_model_2 = SRM_thrust(SRM_stage_2, A_t=0.005, epsilon=73, p_a=0)
     # print("%.2f/207 kg of propellant"%SRM_thrust_model_1.M_p, "%.2f/29 kg of innert"%SRM_thrust_model_1.M_innert)
     # SRM_stage_1.plot_geometry()
     # plt.show()
@@ -40,14 +40,14 @@ if use_SRM:
     # SRM_stage_2.plot_geometry()
     # plt.show()
 
-    mass_2 = 25+SRM_thrust_model_2.M_innert+SRM_thrust_model_2.M_p
-    mass_1 = 20+mass_2+SRM_thrust_model_1.M_innert+SRM_thrust_model_1.M_p
+    mass_2 = 47.5+SRM_thrust_model_2.M_innert+SRM_thrust_model_2.M_p
+    mass_1 = 30+mass_2+SRM_thrust_model_1.M_innert+SRM_thrust_model_1.M_p
     print("Rocket mass of %.2f kg for section 1, %.2f kg for section 2." % (mass_1, mass_2))
 else:
     mass_1, mass_2 = 370, 95
     # Magnitude, Isp, burn time
-    SRM_thrust_model_1 = [14.0e3, 291, 45]  # Total impulse of 630e3 Ns
-    SRM_thrust_model_2 = [4.2e3, 282, 24.5] # Total impulse of 102.9e3 Ns
+    SRM_thrust_model_1 = [11.5e3, 291, 54.5]    # Total impulse of 632.5e3 Ns
+    SRM_thrust_model_2 = [4.5e3, 282, 22.5]     # Total impulse of 101.25e3 Ns
 
 body_fixed_thrust_direction = [
     [0, 0.05, 0.1, 0, 0.05],
@@ -72,7 +72,6 @@ MAV_ascent = ascent_framework.MAV_ascent(
 # Setup and run simulation for stage 1
 stage_res = []
 for stage in [1, 2]:
-    print("Running the simulation for stage %i" % stage)
     MAV_ascent.create_bodies(stage=stage)
     MAV_ascent.create_accelerations()
     guidance_object = ascent_framework.FakeAeroGuidance()
@@ -82,10 +81,11 @@ for stage in [1, 2]:
     MAV_ascent.create_termination_settings(end_time=160*60)
     MAV_ascent.create_propagator_settings()
     MAV_ascent.create_integrator_settings(),#fixed_step=0.1)
+    print("Running the simulation for stage %i" % stage)
     times, states, dep_vars = MAV_ascent.run_simulation()
     stage_res.append([times, states, dep_vars])
-    final_h = dep_vars[-1,1]
-    print("Altitude at end of stage %i at %.2f min of %.2f km, at %.2f km/s, vehicle mass of %.2f kg..." % \
+    final_h = max(dep_vars[:,1])
+    print("Max altitude at end of stage %i at %.2f min of %.2f km, at %.2f km/s, vehicle mass of %.2f kg..." % \
         (stage, (times[-1]-MAV_ascent.launch_epoch)/60, final_h/1e3, dep_vars[-1,5]/1e3, states[-1,-1]))
     if stage == 1:
         t_b_1 = MAV_ascent.thrust.burn_time
@@ -133,16 +133,16 @@ except IndexError:
 dts = np.diff(times*60)
 print("Minimum timestep was of %.3e s, maximum of %.3e s." % (np.ma.masked_array(dts, mask=dts==0).min(), max(dts)))
 
-fig = plt.figure(figsize=(7, 6))
-ax = fig.add_subplot(111, projection="3d")
-ax.scatter(*positions[:idx_crop].T, color="C0", alpha=0.25)
-ax.scatter(*positions[0].T, color="C2")
-ax.scatter(*positions[idx_sep].T, color="C4")
-for i, position in enumerate(positions[:idx_crop]):
-    ax.plot(*np.array([position, position+velocities[i]*2.5e2]).T, color="C1", alpha=0.25)
-    ax.plot(*np.array([position, position+full_a_thrust[i]*5e3]).T, color="C3", alpha=0.25)
-ax.set_xlabel("x"), ax.set_ylabel("y"), ax.set_zlabel("z")
-plt.show()
+# fig = plt.figure(figsize=(7, 6))
+# ax = fig.add_subplot(111, projection="3d")
+# ax.scatter(*positions[:idx_crop].T, color="C0", alpha=0.25)
+# ax.scatter(*positions[0].T, color="C2")
+# ax.scatter(*positions[idx_sep].T, color="C4")
+# for i, position in enumerate(positions[:idx_crop]):
+#     ax.plot(*np.array([position, position+velocities[i]*2.5e2]).T, color="C1", alpha=0.25)
+#     ax.plot(*np.array([position, position+full_a_thrust[i]*5e3]).T, color="C3", alpha=0.25)
+# ax.set_xlabel("x"), ax.set_ylabel("y"), ax.set_zlabel("z")
+# plt.show()
 
 # Create a figure with 5 subplots: a grid of 2x2, then one horizontal one at the bottom
 fig = plt.figure(figsize=(14, 15))
