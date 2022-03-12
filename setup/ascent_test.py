@@ -27,11 +27,11 @@ use_SRM = True
 # Max D=0.57m, most assumed in feasibility study was D=0.51m
 if use_SRM:
     # SRM_stage_1 = rod_and_tube_SRM(R_o=0.24, R_mid=0.19, R_i=0.075, L=1.05)
-    SRM_stage_1 = multi_fin_SRM(R_o=0.24, R_i=0.1725, N_f=20, w_f=0.02, L_f=0.05, L=1.05)
+    SRM_stage_1 = multi_fin_SRM(R_o=0.24, R_i=0.175, N_f=20, w_f=0.02, L_f=0.05, L=1.05)
     # SRM_stage_1 = anchor_SRM(R_o=0.24, R_i=0.165, N_a=4, w=0.015, r_f=0.005, delta_s=0.015, L=1.05)
     SRM_thrust_model_1 = SRM_thrust(SRM_stage_1, A_t=0.065, epsilon=45)
 
-    SRM_stage_2 = spherical_SRM(R_o=0.175, R_i=0.08)
+    SRM_stage_2 = spherical_SRM(R_o=0.175, R_i=0.0975)
     SRM_thrust_model_2 = SRM_thrust(SRM_stage_2, A_t=0.005, epsilon=73, p_a=0)
     # print("%.2f/207 kg of propellant"%SRM_thrust_model_1.M_p, "%.2f/29 kg of innert"%SRM_thrust_model_1.M_innert)
     # SRM_stage_1.plot_geometry()
@@ -40,7 +40,7 @@ if use_SRM:
     # SRM_stage_2.plot_geometry()
     # plt.show()
 
-    mass_2 = 60+SRM_thrust_model_2.M_innert+SRM_thrust_model_2.M_p
+    mass_2 = 65+SRM_thrust_model_2.M_innert+SRM_thrust_model_2.M_p
     mass_1 = 35+mass_2+SRM_thrust_model_1.M_innert+SRM_thrust_model_1.M_p
     print("Rocket mass of %.2f kg for section 1, %.2f kg for section 2." % (mass_1, mass_2))
 else:

@@ -8,7 +8,7 @@ while sys.path[0].split("/")[-1] != "MAV_sim":
 
 from tudatpy.kernel import numerical_simulation
 from tudatpy.kernel.astro import element_conversion
-from tudatpy.kernel.interface import spice_interface
+from tudatpy.kernel.interface import spice
 from tudatpy.kernel.numerical_simulation import environment, environment_setup
 from tudatpy.kernel.numerical_simulation import propagation, propagation_setup
 from tudatpy.util import result2array
@@ -17,7 +17,7 @@ from tudatpy.kernel.math import root_finders
 from thrust.MAV_thrust import MAV_thrust
 
 # Load the SPICE kernel
-spice_interface.load_standard_kernels()
+spice.load_standard_kernels()
 
 class FakeAeroGuidance(propagation.AerodynamicGuidance):
 
@@ -53,7 +53,7 @@ class MAV_ascent:
         # Create Mars
         bodies_to_create = ["Mars"]
         # TODO: investigate why changing reference frame orientation seems to change results (thrust orientation?)
-        body_settings = environment_setup.get_default_body_settings(bodies_to_create, "Mars", "IAU_Mars")
+        body_settings = environment_setup.get_default_body_settings(bodies_to_create, "Mars", "J2000")
         body_settings.get("Mars").atmosphere_settings = environment_setup.atmosphere.exponential_predefined("Mars")
         self.bodies = environment_setup.create_system_of_bodies(body_settings)
         self.central_bodies = ["Mars"]
