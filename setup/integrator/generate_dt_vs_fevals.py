@@ -10,9 +10,9 @@ while sys.path[0].split("/")[-1] != "MAV_sim":
 import numpy as np
 from datetime import datetime
 import copy
+import os
 
 # Tudatpy imports
-from tudatpy import util
 from tudatpy.kernel.astro import time_conversion
 from tudatpy.kernel.numerical_simulation import environment_setup
 from tudatpy.kernel.numerical_simulation import propagation_setup
@@ -22,6 +22,9 @@ from setup import ascent_framework
 from thrust.models.multi_fin import multi_fin_SRM
 from thrust.models.spherical import spherical_SRM
 from thrust.solid_thrust import SRM_thrust
+
+# Define maximum time step to use
+dt = 9.85 # (do no use an int to avoid artifacts with perfect numerical values)
 
 t0 = time_conversion.julian_day_to_seconds_since_epoch(time_conversion.calendar_date_to_julian_day(datetime(2031, 2, 17)))
 SRM_stage_1 = multi_fin_SRM(R_o=0.24, R_i=0.1725, N_f=20, w_f=0.02, L_f=0.05, L=1.05)
@@ -67,8 +70,7 @@ def run_all(dt):
         MAV_ascent.create_termination_settings(end_time=95*60)
         MAV_ascent.create_propagator_settings()
         MAV_ascent.create_integrator_settings(fixed_step=dt)
-        with util.redirect_std():
-            times, states, dep_vars, f_evals = MAV_ascent.run_simulation(return_count=True)
+        times, states, dep_vars, f_evals = MAV_ascent.run_simulation(return_count=True)
         stage_res.append([times, states, dep_vars, f_evals])
 
     # Combine and save results from both propagations
@@ -88,9 +90,15 @@ def run_all(dt):
     np.savez("setup/integrator/benchmark_sim_results/dt_%.4e"%dt, times=times, states=states, dep_vars=dep_vars, f_evals=f_evals)
     print(" -> %.3e function evaluations." % f_evals)
 
-start_dt = 12.45 # (do no use perfect int to avoid artifacts with perfect numerical values)
-dt = start_dt
-while True:
-    run_all(dt)
+# Get list of timesteps for which simulations have been run
+filenames = os.listdir(sys.path[0]+"/setup/integrator/benchmark_sim_results")
+filenames.remove(".gitkeep")
+list_dts = sorted([float(name.replace("dt_", "").replace(".npz", "")) for name in filenames])
 
+while True:
+    # Run the ascent simulation only if it was not already run
+    if dt not in list_dts:
+        run_all(dt)
+    else:
+        print("Skipping %.4e, was already run." % dt)
     dt /= 2
