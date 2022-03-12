@@ -53,7 +53,7 @@ class MAV_ascent:
         # Create Mars
         bodies_to_create = ["Mars"]
         # TODO: investigate why changing reference frame orientation seems to change results (thrust orientation?)
-        body_settings = environment_setup.get_default_body_settings(bodies_to_create, "Mars", "J2000")
+        body_settings = environment_setup.get_default_body_settings(bodies_to_create, "Mars", "IAU_Mars")
         body_settings.get("Mars").atmosphere_settings = environment_setup.atmosphere.exponential_predefined("Mars")
         self.bodies = environment_setup.create_system_of_bodies(body_settings)
         self.central_bodies = ["Mars"]
@@ -184,27 +184,27 @@ class MAV_ascent:
 
     def create_termination_settings(self, end_time=200*60):
 
-        # def is_vehicle_falling(_time):
-        #     dh = self.current_body.flight_conditions.altitude - self.last_h
-        #     self.last_h = self.current_body.flight_conditions.altitude
-        #     position = self.current_body.position
-        #     velocity = self.current_body.velocity
-        #     unit_vector_pos = position / np.linalg.norm(position)
-        #     unit_vector_vel = velocity / np.linalg.norm(velocity)
-        #     dot_product = np.dot(unit_vector_vel, unit_vector_pos)
-        #     angle = np.pi/2-np.arccos(dot_product)
-        #     # print(dh, np.rad2deg(angle))
-        #     # if dh < 0:
-        #     #     input()
-        #     return np.rad2deg(angle) < 2# and self.last_h > 1e3
-        #     return dh < 0
+        def is_vehicle_falling(_time):
+            dh = self.current_body.flight_conditions.altitude - self.last_h
+            self.last_h = self.current_body.flight_conditions.altitude
+            position = self.current_body.position
+            velocity = self.current_body.velocity
+            unit_vector_pos = position / np.linalg.norm(position)
+            unit_vector_vel = velocity / np.linalg.norm(velocity)
+            dot_product = np.dot(unit_vector_vel, unit_vector_pos)
+            angle = np.pi/2-np.arccos(dot_product)
+            # print(dh, np.rad2deg(angle))
+            # if dh < 0:
+            #     input()
+            return np.rad2deg(angle) < 0# and self.last_h > 1e3
+            return dh < 0
 
         if self.current_stage == 1:
             termination_min_altitude_settings = propagation_setup.propagator.dependent_variable_termination(
                 dependent_variable_settings=propagation_setup.dependent_variable.altitude(self.current_name, "Mars"),
                 limit_value=-10e3,
                 use_as_lower_limit=True)
-            # termination_apogee_settings = propagation_setup.propagator.custom_termination(is_vehicle_falling)
+            termination_apogee_settings = propagation_setup.propagator.custom_termination(is_vehicle_falling)
             termination_apogee_settings = propagation_setup.propagator.dependent_variable_termination(
                 dependent_variable_settings=propagation_setup.dependent_variable.flight_path_angle(self.current_name, "Mars"),
                 limit_value=0,

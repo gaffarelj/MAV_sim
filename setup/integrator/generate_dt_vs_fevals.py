@@ -27,11 +27,11 @@ from thrust.solid_thrust import SRM_thrust
 dt = 9.85 # (do no use an int to avoid artifacts with perfect numerical values)
 
 t0 = time_conversion.julian_day_to_seconds_since_epoch(time_conversion.calendar_date_to_julian_day(datetime(2031, 2, 17)))
-SRM_stage_1 = multi_fin_SRM(R_o=0.24, R_i=0.1725, N_f=20, w_f=0.02, L_f=0.05, L=1.05)
+SRM_stage_1 = multi_fin_SRM(R_o=0.24, R_i=0.175, N_f=20, w_f=0.02, L_f=0.05, L=1.05)
 SRM_thrust_model_1 = SRM_thrust(SRM_stage_1, A_t=0.065, epsilon=45)
-SRM_stage_2 = spherical_SRM(R_o=0.175, R_i=0.08)
+SRM_stage_2 = spherical_SRM(R_o=0.175, R_i=0.0975)
 SRM_thrust_model_2 = SRM_thrust(SRM_stage_2, A_t=0.005, epsilon=73, p_a=0)
-mass_2 = 60+SRM_thrust_model_2.M_innert+SRM_thrust_model_2.M_p
+mass_2 = 65+SRM_thrust_model_2.M_innert+SRM_thrust_model_2.M_p
 mass_1 = 35+mass_2+SRM_thrust_model_1.M_innert+SRM_thrust_model_1.M_p
 body_fixed_thrust_direction = [
     [0, 0.05, 0.1, 0, 0.05],
@@ -67,7 +67,7 @@ def run_all(dt):
         MAV_ascent.create_initial_state()
         MAV_ascent.create_dependent_variables_to_save(default=False)
         MAV_ascent.dependent_variables_to_save.append(propagation_setup.dependent_variable.altitude(MAV_ascent.current_name, "Mars"))
-        MAV_ascent.create_termination_settings(end_time=95*60)
+        MAV_ascent.create_termination_settings(end_time=100*60)
         MAV_ascent.create_propagator_settings()
         MAV_ascent.create_integrator_settings(fixed_step=dt)
         times, states, dep_vars, f_evals = MAV_ascent.run_simulation(return_count=True)
@@ -93,12 +93,12 @@ def run_all(dt):
 # Get list of timesteps for which simulations have been run
 filenames = os.listdir(sys.path[0]+"/setup/integrator/benchmark_sim_results")
 filenames.remove(".gitkeep")
-list_dts = sorted([float(name.replace("dt_", "").replace(".npz", "")) for name in filenames])
+list_dts = sorted([name.replace("dt_", "").replace(".npz", "") for name in filenames])
 
 while True:
     # Run the ascent simulation only if it was not already run
-    if dt not in list_dts:
+    if "%.4e"%dt not in list_dts:
         run_all(dt)
     else:
-        print("Skipping %.4e, was already run." % dt)
+        print("Skipping dt = %.4e s because it was already run." % dt)
     dt /= 2
