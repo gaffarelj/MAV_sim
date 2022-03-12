@@ -8,7 +8,6 @@ while sys.path[0].split("/")[-1] != "MAV_sim":
 
 # Standard imports
 import numpy as np
-from matplotlib import pyplot as plt
 from datetime import datetime
 import copy
 
@@ -88,57 +87,10 @@ def run_all(dt):
 
     np.savez("setup/integrator/benchmark_sim_results/dt_%.4e"%dt, times=times, states=states, dep_vars=dep_vars, f_evals=f_evals)
     print(" -> %.3e function evaluations." % f_evals)
-    
 
-max_pos_diffs, max_vel_diffs = [], []
-dts = []
-# smallest_dt, largest_dt = 5e-1*1.01, 10 # 1.01 try to avoid perfect numerical values (without decimals)
-
-# dt = smallest_dt
 start_dt = 12.45 # (do no use perfect int to avoid artifacts with perfect numerical values)
 dt = start_dt
-# more_accurate_states, more_accurate_altitudes = run_all(dt/2)
-while True:#dt <= largest_dt*2:
-    # current_states, current_altitudes = run_all(dt)
+while True:
     run_all(dt)
 
-    # print("current:", list(current_states.values())[50])
-    # print("better:", list(more_accurate_states.values())[50])
-    # benchmark_diff = util.compare_results(current_states, more_accurate_states, np.linspace(t0+10, t0+19*60, 5000))
-    # benchmark_diff_array = util.result2array(benchmark_diff)
-    # diff_times = benchmark_diff_array[:,0] - benchmark_diff_array[0,0]
-    # diff_pos = np.linalg.norm(benchmark_diff_array[:,1:4], axis=1)
-    # diff_vel = np.linalg.norm(benchmark_diff_array[:,4:7], axis=1)
-    # # plt.plot(diff_times/60, diff_pos, label="Position [m]")
-    # # plt.plot(diff_times/60, diff_vel, label="Velocity [m/s]")
-    # more_accurate_states_array = util.result2array(more_accurate_states)
-    # current_states_array = util.result2array(current_states)
-    # # plt.plot((more_accurate_states_array[:,0]-more_accurate_states_array[0,0])/60, more_accurate_altitudes/1e3, label="dt = %.2e [s]" % (dt/2))
-    # # plt.plot((current_states_array[:,0]-current_states_array[0,0])/60, current_altitudes/1e3, label="dt = %.2e [s]" % (dt))
-    # # plt.xlabel("Time [min]"), plt.ylabel("Altitude [km]")
-    # # plt.grid(), plt.legend(), plt.tight_layout()
-
-    # max_pos_diffs.append(max(diff_pos)), max_vel_diffs.append(max(diff_vel))
-    # print("Maximum position error of %.3e m, velocity error of %.3e m/s" % (max_pos_diffs[-1], max_vel_diffs[-1]))
-    # dts.append(dt)
-    # more_accurate_states = current_states
-    # more_accurate_altitudes = current_altitudes
-    # plt.show()
     dt /= 2
-
-    # fig = plt.figure(figsize=(7, 6))
-    # ax = fig.add_subplot(111, projection="3d")
-    # ax.plot(more_accurate_states_array[:,1], more_accurate_states_array[:,2], more_accurate_states_array[:,3], label="dt = %.2e [s]" % (dt/2))
-    # ax.plot(current_states_array[:,1], current_states_array[:,2], current_states_array[:,3], label="dt = %.2e [s]" % (dt))
-    # ax.legend()
-    # plt.show()
-
-plt.plot(dts, max_pos_diffs, label="Position [m]", linewidth=1, markersize=4, marker="o")
-plt.plot(dts, max_vel_diffs, label="Velocity [m/s]", linewidth=1, markersize=4, marker="o")
-plt.xlabel("Step size [s]"), plt.ylabel("Error")
-plt.yscale("log"), plt.xscale("log")
-plt.grid(), plt.legend(), plt.tight_layout()
-plt.show()
-
-# # Save the benchmark values
-# np.savez(sys.path[0]+"/setup/integrator/benchmark", times=times, states=states, f_evals=f_evals)
