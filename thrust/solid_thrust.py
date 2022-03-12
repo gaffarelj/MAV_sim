@@ -23,7 +23,7 @@ class SRM_thrust:
         epsilon=50.2,   # [-] area ratio (exhaust/throat)
         T_c=3645,       # [K] chamber temperature (https://ieeexplore-ieee-org.tudelft.idm.oclc.org/document/8742205)
         p_a=650*0.4,    # [Pa] ambient pressure (650Pa = "Sea level" on Mars)
-        a=0.004202,     # [m/s/MPa] burning rate coefficient (to use with pressure in MPa)
+        a=0.004202,     # [m/s/MPa^n] burning rate coefficient (to use with pressure in MPa)
         n=0.31,         # [-] burning rate exponent (to use with pressure in MPa)
         rho_p=1854.5,   # [kg/m3] propellant density
         M=0.02414,      # [kg/mol] propellant molar mass FROM CEA # Air Launch versus Ground Launch: a Multidisciplinary Design Optimization Study of Expendable Launch Vehicles on Cost and Performance

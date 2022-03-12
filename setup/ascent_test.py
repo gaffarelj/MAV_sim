@@ -31,7 +31,7 @@ if use_SRM:
     # SRM_stage_1 = anchor_SRM(R_o=0.24, R_i=0.165, N_a=4, w=0.015, r_f=0.005, delta_s=0.015, L=1.05)
     SRM_thrust_model_1 = SRM_thrust(SRM_stage_1, A_t=0.065, epsilon=45)
 
-    SRM_stage_2 = spherical_SRM(R_o=0.175, R_i=0.115)
+    SRM_stage_2 = spherical_SRM(R_o=0.175, R_i=0.08)
     SRM_thrust_model_2 = SRM_thrust(SRM_stage_2, A_t=0.005, epsilon=73, p_a=0)
     # print("%.2f/207 kg of propellant"%SRM_thrust_model_1.M_p, "%.2f/29 kg of innert"%SRM_thrust_model_1.M_innert)
     # SRM_stage_1.plot_geometry()
@@ -40,8 +40,8 @@ if use_SRM:
     # SRM_stage_2.plot_geometry()
     # plt.show()
 
-    mass_2 = 47.5+SRM_thrust_model_2.M_innert+SRM_thrust_model_2.M_p
-    mass_1 = 30+mass_2+SRM_thrust_model_1.M_innert+SRM_thrust_model_1.M_p
+    mass_2 = 60+SRM_thrust_model_2.M_innert+SRM_thrust_model_2.M_p
+    mass_1 = 35+mass_2+SRM_thrust_model_1.M_innert+SRM_thrust_model_1.M_p
     print("Rocket mass of %.2f kg for section 1, %.2f kg for section 2." % (mass_1, mass_2))
 else:
     mass_1, mass_2 = 370, 95
@@ -49,9 +49,10 @@ else:
     SRM_thrust_model_1 = [11.5e3, 291, 54.5]    # Total impulse of 632.5e3 Ns
     SRM_thrust_model_2 = [4.5e3, 282, 22.5]     # Total impulse of 101.25e3 Ns
 
+# Max deflection of 5 deg
 body_fixed_thrust_direction = [
     [0, 0.05, 0.1, 0, 0.05],
-    [0, 0, -0.05, -0.1, -0.1]
+    0   # second stage has no TVC
 ]
 
 MAV_ascent = ascent_framework.MAV_ascent(
@@ -69,7 +70,7 @@ MAV_ascent = ascent_framework.MAV_ascent(
     body_fixed_thrust_direction=body_fixed_thrust_direction
 )
 
-# Setup and run simulation for stage 1
+# Setup and run simulation for both stages
 stage_res = []
 for stage in [1, 2]:
     MAV_ascent.create_bodies(stage=stage)
@@ -95,7 +96,6 @@ for stage in [1, 2]:
             break
     else:
         t_b_2 = MAV_ascent.thrust.burn_time
-
 if stage == 1:
     # Extract results from first propagation only if stage 2 was not used
     times = stage_res[0][0]
@@ -132,6 +132,12 @@ except IndexError:
 
 dts = np.diff(times*60)
 print("Minimum timestep was of %.3e s, maximum of %.3e s." % (np.ma.masked_array(dts, mask=dts==0).min(), max(dts)))
+# plt.plot(times[:idx_crop], dts[:idx_crop])
+# plt.grid()
+# plt.xlabel("Time [min]"), plt.ylabel("Time step [s]")
+# plt.tight_layout()
+# plt.yscale("log")
+# plt.show()
 
 # fig = plt.figure(figsize=(7, 6))
 # ax = fig.add_subplot(111, projection="3d")
