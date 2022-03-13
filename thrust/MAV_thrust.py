@@ -16,7 +16,7 @@ from thrust.solid_thrust import SRM_thrust
 
 class MAV_thrust:
 
-    def __init__(self, ascent_model, angle, thrust_model, body_directions=0, print_status=False):
+    def __init__(self, ascent_model, angle, thrust_model, body_directions_y=0, body_directions_z=0, print_status=False):
         self.angle = angle
         self.thrust_model = thrust_model
 
@@ -38,11 +38,16 @@ class MAV_thrust:
         else:
             raise NotImplementedError("The thrust model `%s` does not correspond to anything implemented" % type(self.thrust_model))
         
-        if type(body_directions) == list:
-            body_direction_times = np.linspace(0, self.burn_time, len(body_directions))
-            self.body_direction_function = interp1d(body_direction_times, body_directions)
+        if type(body_directions_y) == list:
+            body_direction_times = np.linspace(0, self.burn_time, len(body_directions_y))
+            self.body_direction_y_function = interp1d(body_direction_times, body_directions_y)
         else:
-            self.body_direction_function = lambda t: body_directions
+            self.body_direction_y_function = lambda t: body_directions_y
+        if type(body_directions_z) == list:
+            body_direction_times = np.linspace(0, self.burn_time, len(body_directions_z))
+            self.body_direction_z_function = interp1d(body_direction_times, body_directions_z)
+        else:
+            self.body_direction_z_function = lambda t: body_directions_z
 
         self.ascent_model = ascent_model
         self.coasting = False
@@ -97,12 +102,29 @@ class MAV_thrust:
         if self.time_elapsed > self.burn_time:
             return np.zeros((3,3))
         else:
-            side_angle = self.body_direction_function(self.time_elapsed)
-            return np.array([
-                [np.cos(side_angle), np.sin(side_angle), 0],
-                [np.sin(side_angle), np.cos(side_angle), 0],
-                [0, 0, 1]
+            angle_y = self.body_direction_y_function(self.time_elapsed)
+            angle_z = self.body_direction_z_function(self.time_elapsed)
+            T_y = np.array([
+                [np.cos(angle_y),   0,      -np.sin(angle_y)],
+                [0,                 1,      0],
+                [np.sin(angle_y),   0,      np.cos(angle_y)]
             ])
+            T_z = np.array([
+                [np.cos(angle_z),   np.sin(angle_z),    0],
+                [-np.sin(angle_z),  np.cos(angle_z),    0],
+                [0,                 0,                  1]
+            ])
+            body_fixed_thrust_direction = np.dot(T_y, T_z)
+
+            # print(self.time_elapsed)
+            # print(angle_y)
+            # print(T_y)
+            # print(angle_z)
+            # print(T_z)
+            # print(np.linalg.norm(body_fixed_thrust_direction, axis=0))
+            # print(body_fixed_thrust_direction), input()
+            
+            return body_fixed_thrust_direction
 
     def get_thrust_orientation(self, time):
         # Get aerodynamic angle calculator

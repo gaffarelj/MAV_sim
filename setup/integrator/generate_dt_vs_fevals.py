@@ -29,12 +29,16 @@ dt = 9.85 # (do no use an int to avoid artifacts with perfect numerical values)
 t0 = time_conversion.julian_day_to_seconds_since_epoch(time_conversion.calendar_date_to_julian_day(datetime(2031, 2, 17)))
 SRM_stage_1 = multi_fin_SRM(R_o=0.24, R_i=0.175, N_f=20, w_f=0.02, L_f=0.05, L=1.05)
 SRM_thrust_model_1 = SRM_thrust(SRM_stage_1, A_t=0.065, epsilon=45)
-SRM_stage_2 = spherical_SRM(R_o=0.175, R_i=0.0975)
+SRM_stage_2 = spherical_SRM(R_o=0.165, R_i=0.0915)
 SRM_thrust_model_2 = SRM_thrust(SRM_stage_2, A_t=0.005, epsilon=73, p_a=0)
-mass_2 = 65+SRM_thrust_model_2.M_innert+SRM_thrust_model_2.M_p
-mass_1 = 35+mass_2+SRM_thrust_model_1.M_innert+SRM_thrust_model_1.M_p
-body_fixed_thrust_direction = [
+mass_2 = 47.5 + SRM_thrust_model_2.M_innert + SRM_thrust_model_2.M_p
+mass_1 = 65 + mass_2 + SRM_thrust_model_1.M_innert + SRM_thrust_model_1.M_p
+body_fixed_thrust_direction_y = [
     [0, 0.05, 0.1, 0, 0.05],
+    0
+]
+body_fixed_thrust_direction_z = [
+    [0, -0.05, 0.0, 0.05, 0.05],
     0
 ]
 # Define default ascent model
@@ -50,7 +54,8 @@ MAV_ascent_original = ascent_framework.MAV_ascent(
     target_orbit_i = np.deg2rad(25),    # MAV­-OSO­-03
     max_a = 15 * 9.80665,               # MAV­-LL-­02
     max_AoA = np.deg2rad(4),            # MAV­-LL-­05
-    body_fixed_thrust_direction=body_fixed_thrust_direction
+    body_fixed_thrust_direction_y=body_fixed_thrust_direction_y,
+    body_fixed_thrust_direction_z=body_fixed_thrust_direction_z
 )
 
 def run_all(dt):
@@ -58,7 +63,6 @@ def run_all(dt):
     stage_res = []
     # Setup and run simulation for stage 1 then 2
     print("Running with dt = %.3e s" % dt)
-    # f_evals_list = []
     for stage in [1, 2]:
         MAV_ascent.create_bodies(stage=stage)
         MAV_ascent.create_accelerations()
