@@ -16,9 +16,6 @@ from tudatpy.kernel.math import root_finders
 
 from thrust.MAV_thrust import MAV_thrust
 
-# Load the SPICE kernel
-spice.load_standard_kernels()
-
 class FakeAeroGuidance(propagation.AerodynamicGuidance):
 
     def __init__(self):
@@ -46,6 +43,9 @@ class MAV_ascent:
         self.max_angle_of_attack = max_AoA
         self.last_h = -np.inf
         self.body_fixed_thrust_direction = body_fixed_thrust_direction
+
+        # Load the SPICE kernel
+        spice.load_standard_kernels()
 
     def create_bodies(self, stage, include_aero=True):
         self.current_stage = stage
@@ -92,7 +92,7 @@ class MAV_ascent:
         self.bodies_to_propagate = [self.current_name]
 
     def create_accelerations(self, only_thrust_dict=False):
-        # Define thrust
+        # Define thrust acceleration
         self.thrust = MAV_thrust(
             self,
             self.launch_angles[self.current_stage-1],
@@ -104,8 +104,7 @@ class MAV_ascent:
             self.thrust.get_specific_impulse,
             self.thrust.is_thrust_on)
 
-        if only_thrust_dict:
-            accelerations_on_vehicle = {
+        accelerations_on_vehicle = {
                 self.current_name: [
                     propagation_setup.acceleration.thrust_from_direction_and_magnitude(
                         thrust_direction_settings,
@@ -113,21 +112,16 @@ class MAV_ascent:
                     )
                 ]
             }
+
+        if only_thrust_dict:
             return accelerations_on_vehicle
 
-        # Define accelerations
-        accelerations_on_vehicle = {
-            self.current_name: [
-                propagation_setup.acceleration.thrust_from_direction_and_magnitude(
-                    thrust_direction_settings,
-                    thrust_magnitude_settings
-                )
-            ],
-            "Mars": [
-                propagation_setup.acceleration.spherical_harmonic_gravity(4, 4),
+        # Add environmental accelerations
+        accelerations_on_vehicle["Mars"] = [
+                #propagation_setup.acceleration.spherical_harmonic_gravity(4, 4),
+                propagation_setup.acceleration.point_mass_gravity( ),
                 propagation_setup.acceleration.aerodynamic()
             ]
-        }
 
         acceleration_dict = {self.current_name: accelerations_on_vehicle}
         self.acceleration_models = propagation_setup.create_acceleration_models(
