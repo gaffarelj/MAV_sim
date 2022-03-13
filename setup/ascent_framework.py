@@ -259,24 +259,24 @@ class MAV_ascent:
             minimum_time_step = fixed_step
             maximum_time_step = fixed_step
             tolerance = np.inf
-            # self.integrator_settings = propagation_setup.integrator.runge_kutta_4(
-            #     self.initial_epoch, initial_time_step )
-        else:
-            initial_time_step = 1e-3
-            minimum_time_step = 1e-8
-            maximum_time_step = 60
-            tolerance = 1e-18
-        coefficients = propagation_setup.integrator.rkf_78
-        self.integrator_settings = propagation_setup.integrator.runge_kutta_variable_step_size(
-            self.initial_epoch,
-            initial_time_step,
-            coefficients,
-            minimum_time_step,
-            maximum_time_step,
-            relative_error_tolerance=tolerance,
-            absolute_error_tolerance=tolerance,
-            maximum_factor_increase=2,
-            minimum_factor_increase=0.05)
+            self.integrator_settings = propagation_setup.integrator.runge_kutta_4(
+                self.initial_epoch, initial_time_step )
+        # else:
+        #     initial_time_step = 1e-3
+        #     minimum_time_step = 1e-8
+        #     maximum_time_step = 60
+        #     tolerance = 1e-18
+        # coefficients = propagation_setup.integrator.rkf_78
+        # self.integrator_settings = propagation_setup.integrator.runge_kutta_variable_step_size(
+        #     self.initial_epoch,
+        #     initial_time_step,
+        #     coefficients,
+        #     minimum_time_step,
+        #     maximum_time_step,
+        #     relative_error_tolerance=tolerance,
+        #     absolute_error_tolerance=tolerance,
+        #     maximum_factor_increase=2,
+        #     minimum_factor_increase=0.05)
 
     def run_simulation(self, return_raw=False, return_count=False):
         dynamics_simulator = numerical_simulation.SingleArcSimulator(
