@@ -1,6 +1,9 @@
-import sys
+import sys, os
 # Add tudatpy path
-sys.path.append("/mnt/c/TUDAT/tudat-bundle/build/tudatpy")
+if "cala" in os.getcwd():
+    sys.path.append("/cala/jeremie/tudat-bundle/build/tudatpy")
+else:
+    sys.path.append("/mnt/c/TUDAT/tudat-bundle/build/tudatpy")
 # Set path to uppermost project level
 sys.path = [p for p in sys.path if p != ""]
 while sys.path[0].split("/")[-1] != "MAV_sim":
