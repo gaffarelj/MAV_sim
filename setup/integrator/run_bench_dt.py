@@ -87,5 +87,6 @@ def run_all(dt):
         dep_vars = np.concatenate((stage_res[0][2], stage_res[1][2]))
         f_evals = stage_res[0][3] + stage_res[1][3]
 
+    print("Saving state history for dt = %.3e..." % dt)
     np.savez("setup/integrator/benchmark_sim_results/dt_%.4e"%dt, times=times, states=states, dep_vars=dep_vars, f_evals=f_evals)
     print("dt = %.3e s -> %.3e f evals." % (dt, f_evals))
