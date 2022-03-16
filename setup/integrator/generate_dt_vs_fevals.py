@@ -1,8 +1,6 @@
 if __name__ == "__main__":
 
     import sys
-    # Add tudatpy path
-    sys.path.append("/mnt/c/TUDAT/tudat-bundle/build/tudatpy")
     # Set path to uppermost project level
     sys.path = [p for p in sys.path if p != ""]
     while sys.path[0].split("/")[-1] != "MAV_sim":
@@ -18,19 +16,18 @@ if __name__ == "__main__":
 
     # Define maximum time step to use
     dt = 9.85 # (do no use an int to avoid artifacts with perfect numerical values)
+    min_dt = 1e-6
 
     # Get list of timesteps for which simulations have been run
     filenames = os.listdir(sys.path[0]+"/setup/integrator/benchmark_sim_results")
     filenames.remove(".gitkeep")
-    list_dts = sorted([float(name.replace("dt_", "").replace(".npz", "")) for name in filenames])
-
-    if len(list_dts) != 0:
-        dt = list_dts[0]
+    list_dts = sorted([name.replace("dt_", "").replace(".npz", "") for name in filenames])
         
     inputs = []
-    for i in range(100):
-        inputs.append([dt])
+    while dt > min_dt:
+        if "%.4e" % dt not in list_dts:
+            inputs.append([dt])
         dt = 10**(np.log10(dt) - 0.1)
 
-    with MP.get_context("spawn").Pool(processes=int(MP.cpu_count()//2)) as pool:
+    with MP.get_context("spawn").Pool(3) as pool:
         outputs = pool.starmap(run_all, inputs)
