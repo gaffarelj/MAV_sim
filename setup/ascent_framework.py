@@ -212,12 +212,13 @@ class MAV_ascent:
                 )
             self.combined_termination_settings = propagation_setup.propagator.hybrid_termination(
             [termination_apogee_settings, termination_min_altitude_settings], fulfill_single_condition=True)
+            self.end_epoch = self.initial_epoch + end_time
         else:
             termination_min_altitude_settings = propagation_setup.propagator.dependent_variable_termination(
                 dependent_variable_settings=propagation_setup.dependent_variable.altitude(self.current_name, "Mars"),
                 limit_value=50e3,
                 use_as_lower_limit=True)
-            termination_max_time_settings = propagation_setup.propagator.time_termination(self.initial_epoch + end_time)
+            termination_max_time_settings = propagation_setup.propagator.time_termination(self.end_epoch)
             self.combined_termination_settings = propagation_setup.propagator.hybrid_termination(
             [termination_max_time_settings, termination_min_altitude_settings], fulfill_single_condition=True)
 
