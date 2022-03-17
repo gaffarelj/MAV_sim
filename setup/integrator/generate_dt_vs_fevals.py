@@ -16,7 +16,7 @@ if __name__ == "__main__":
 
     # Define maximum time step to use
     dt = 9.95 # (do no use an int to avoid artifacts with perfect numerical values)
-    min_dt = 1e-6
+    min_dt = 1e-5
 
     # Get list of timesteps for which simulations have been run
     filenames = os.listdir(sys.path[0]+"/setup/integrator/benchmark_sim_results")
@@ -29,5 +29,10 @@ if __name__ == "__main__":
             inputs.append([dt])
         dt = 10**(np.log10(dt) - 0.1)
 
-    with MP.get_context("spawn").Pool(8) as pool:
+    # Add one more input half the last dt, to compute error in the last dt
+    inputs.append([inputs[-1][0]*0.49])
+
+    print("Press ENTER to run the following inputs:\n", inputs), input()
+
+    with MP.get_context("spawn").Pool(3) as pool:
         outputs = pool.starmap(run_all, inputs)
