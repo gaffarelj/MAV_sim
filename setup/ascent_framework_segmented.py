@@ -44,7 +44,7 @@ class MAV_ascent:
     """
     def __init__(self, launch_epoch, launch_lat, launch_lon, launch_h, mass_stages, \
         launch_angles, thrust_models, target_orbit_h, target_orbit_i, max_a, max_AoA, \
-        body_fixed_thrust_direction_y, body_fixed_thrust_direction_z):
+        body_fixed_thrust_direction_y, body_fixed_thrust_direction_z, powered):
 
         # Save launch values
         self.launch_epoch = launch_epoch            # Launch epoch in seconds since J2000
@@ -69,6 +69,8 @@ class MAV_ascent:
         # Save the nozzle deflection in both planes (TVC)
         self.body_fixed_thrust_direction_y = body_fixed_thrust_direction_y  # List of floats or float representing the deflections in radians, one for each stage
         self.body_fixed_thrust_direction_z = body_fixed_thrust_direction_z  # Same
+
+        self.powered = powered
 
         # Load the SPICE kernel
         spice.load_standard_kernels()
@@ -127,34 +129,33 @@ class MAV_ascent:
         self.bodies_to_propagate = [self.current_name]
 
     def create_accelerations(self, only_thrust_dict=False):
-        # Setup the MAV thrust class from the thrust models input to this ascent class
-        self.thrust = MAV_thrust(
-            self,
-            self.launch_angles[self.current_stage-1],
-            self.thrust_models[self.current_stage-1],
-            self.body_fixed_thrust_direction_y[self.current_stage-1],
-            self.body_fixed_thrust_direction_z[self.current_stage-1])
+        if self.powered:
+            # Setup the MAV thrust class from the thrust models input to this ascent class
+            self.thrust = MAV_thrust(
+                self,
+                self.launch_angles[self.current_stage-1],
+                self.thrust_models[self.current_stage-1],
+                self.body_fixed_thrust_direction_y[self.current_stage-1],
+                self.body_fixed_thrust_direction_z[self.current_stage-1])
 
-        # Define the thrust acceleration direction and magnitude from the thrust class
-        thrust_direction_settings = propagation_setup.thrust.custom_thrust_direction(self.thrust.get_thrust_orientation)
-        thrust_magnitude_settings = propagation_setup.thrust.custom_thrust_magnitude(
-            self.thrust.get_thrust_magnitude,
-            self.thrust.get_specific_impulse,
-            self.thrust.is_thrust_on)
+            # Define the thrust acceleration direction and magnitude from the thrust class
+            thrust_direction_settings = propagation_setup.thrust.custom_thrust_direction(self.thrust.get_thrust_orientation)
+            thrust_magnitude_settings = propagation_setup.thrust.custom_thrust_magnitude(
+                self.thrust.get_thrust_magnitude,
+                self.thrust.get_specific_impulse,
+                self.thrust.is_thrust_on)
 
-        # Define the thrust acceleration of the vehicle on itself using the direction and magnitude
-        accelerations_on_vehicle = {
-                self.current_name: [
-                    propagation_setup.acceleration.thrust_from_direction_and_magnitude(
-                        thrust_direction_settings,
-                        thrust_magnitude_settings
-                    )
-                ]
-            }
-
-        # Return the acceleration if only thrust is to be included
-        if only_thrust_dict:
-            return accelerations_on_vehicle
+            # Define the thrust acceleration of the vehicle on itself using the direction and magnitude
+            accelerations_on_vehicle = {
+                    self.current_name: [
+                        propagation_setup.acceleration.thrust_from_direction_and_magnitude(
+                            thrust_direction_settings,
+                            thrust_magnitude_settings
+                        )
+                    ]
+                }
+        else:
+            accelerations_on_vehicle = {}
 
         # Add environmental accelerations (Mars SH up to D/O 4 and aerodynamics)
         accelerations_on_vehicle["Mars"] = [
@@ -204,70 +205,35 @@ class MAV_ascent:
 
     def create_dependent_variables_to_save(self, default=True):
         # Use a pre-defined set of dependent variables (their names should be self-explanatory)
-        if default:
-            self.dependent_variables_to_save = [
-                propagation_setup.dependent_variable.flight_path_angle(self.current_name, "Mars"),
-                propagation_setup.dependent_variable.altitude(self.current_name, "Mars"),
-                propagation_setup.dependent_variable.aerodynamic_force_coefficients(self.current_name),
-                propagation_setup.dependent_variable.airspeed(self.current_name, "Mars"),
-                propagation_setup.dependent_variable.total_acceleration_norm(self.current_name),
-                propagation_setup.dependent_variable.mach_number(self.current_name, "Mars"),
-                propagation_setup.dependent_variable.body_mass(self.current_name),
-                propagation_setup.dependent_variable.angle_of_attack(self.current_name, "Mars"),
-                propagation_setup.dependent_variable.relative_position(self.current_name, "Mars"),
-                propagation_setup.dependent_variable.single_acceleration_norm(
-                    propagation_setup.acceleration.spherical_harmonic_gravity_type, self.current_name, "Mars"),
-                propagation_setup.dependent_variable.single_acceleration_norm(
-                    propagation_setup.acceleration.thrust_acceleration_type, self.current_name, self.current_name),
-                propagation_setup.dependent_variable.single_acceleration_norm(
-                    propagation_setup.acceleration.aerodynamic_type, self.current_name, "Mars"),
-                propagation_setup.dependent_variable.dynamic_pressure( self.current_name ),
-                propagation_setup.dependent_variable.relative_velocity(self.current_name, "Mars"),
-                propagation_setup.dependent_variable.single_acceleration(
-                    propagation_setup.acceleration.thrust_acceleration_type, self.current_name, self.current_name)
-            ]
-        # Otherwise, set the dependent variables to save as an empty list
-        else:
-            self.dependent_variables_to_save = []
+        self.dependent_variables_to_save = []
 
     def create_termination_settings(self, end_time=200*60):
+        # Terminations:
+        # * Stage 1:
+        #   - powered: burnoff (time = burn_time)
+        #   - unpowered: apogee
+        # * Stage 2:
+        #   - powered: burnoff
+        #   - unpowered: end_time
+
         # For the first stage, terminate at apogee or below a certain altitude
-        if self.current_stage == 1:
-            # Define termination settings to finish when the vehicle get below -10km
-            termination_min_altitude_settings = propagation_setup.propagator.dependent_variable_termination(
-                dependent_variable_settings=propagation_setup.dependent_variable.altitude(self.current_name, "Mars"),
-                limit_value=-10e3,
-                use_as_lower_limit=True)
-            
-            # Define termination settings to finish exactly at apogee, when the flight path becomes 0
-            termination_apogee_settings = propagation_setup.propagator.dependent_variable_termination(
-                dependent_variable_settings=propagation_setup.dependent_variable.flight_path_angle(self.current_name, "Mars"),
-                limit_value=0,
-                use_as_lower_limit=True,
-                terminate_exactly_on_final_condition=True,
-                termination_root_finder_settings=root_finders.secant(
-                    maximum_iteration=5,
-                    maximum_iteration_handling=root_finders.MaximumIterationHandling.accept_result)
-                )
-            
-            # Combine both termination settings, to finish as soon as one of the two is reached
-            self.combined_termination_settings = propagation_setup.propagator.hybrid_termination(
-            [termination_apogee_settings, termination_min_altitude_settings], fulfill_single_condition=True)
-        # For the second stage, terminate after a given time or below a given altitude
-        else:
-            # Terminate if the altitude becomes lower than 50km
-            termination_min_altitude_settings = propagation_setup.propagator.dependent_variable_termination(
-                dependent_variable_settings=propagation_setup.dependent_variable.altitude(self.current_name, "Mars"),
-                limit_value=50e3,
-                use_as_lower_limit=True)
+        if self.powered:
+            self.combined_termination_settings = propagation_setup.propagator.time_termination(
+                self.launch_epoch + self.thrust.burn_time,
+                terminate_exactly_on_final_condition=True)
 
-            # Terminate after a given time has elapsed since the launch epoch
-            termination_max_time_settings = propagation_setup.propagator.time_termination(self.launch_epoch + end_time)
-            
-            # Combine both termination settings, to finish as soon as one of the two is reached
-            self.combined_termination_settings = propagation_setup.propagator.hybrid_termination(
-            [termination_max_time_settings, termination_min_altitude_settings], fulfill_single_condition=True)
-
+        elif self.current_stage == 1:
+            self.combined_termination_settings = propagation_setup.propagator.dependent_variable_termination(
+            dependent_variable_settings=propagation_setup.dependent_variable.flight_path_angle(self.current_name, "Mars"),
+            limit_value=0,
+            use_as_lower_limit=True,
+            terminate_exactly_on_final_condition=True,
+            termination_root_finder_settings=root_finders.secant(
+                maximum_iteration=5,
+                maximum_iteration_handling=root_finders.MaximumIterationHandling.accept_result)
+            )
+        elif self.current_stage == 2:
+            self.combined_termination_settings = propagation_setup.propagator.time_termination(self.launch_epoch + end_time)
 
     def create_propagator_settings(self):
         # Create translational propagator settings, using the defined bodies/models
@@ -280,36 +246,40 @@ class MAV_ascent:
             propagation_setup.propagator.cowell,
             output_variables=self.dependent_variables_to_save
         )
+
+        if self.powered:
         
-        # If the thrust model is setup for a constant thrust, define mass rate settings in relation to the thrust
-        if self.thrust.thrust_type == "constant":
-            mass_rate_settings = {self.current_name:[propagation_setup.mass_rate.from_thrust()]}
-        # Otherwise, use the mass flow computed from the thrust model
+            # If the thrust model is setup for a constant thrust, define mass rate settings in relation to the thrust
+            if self.thrust.thrust_type == "constant":
+                mass_rate_settings = {self.current_name:[propagation_setup.mass_rate.from_thrust()]}
+            # Otherwise, use the mass flow computed from the thrust model
+            else:
+                mass_rate_settings = {self.current_name:[propagation_setup.mass_rate.custom(self.thrust.get_mass_flow)]}
+            
+            # Create the mass rate model from the mass rate settings
+            mass_rate_models = propagation_setup.create_mass_rate_models(
+                self.bodies,
+                mass_rate_settings,
+                self.acceleration_models
+            )
+
+            # Set the initial mass
+            if self.current_stage == 1:
+                launch_mass = self.stage_1_wet_mass
+            else:
+                launch_mass = self.stage_2_wet_mass
+
+            # Define the mass propagator settings
+            mass_propagator_settings = propagation_setup.propagator.mass(
+                self.bodies_to_propagate, mass_rate_models, [launch_mass], self.combined_termination_settings)
+
+            # Define combined propagator settings including the translation and mass propagators
+            self.propagator_settings = propagation_setup.propagator.multitype(
+                [translational_propagator_settings, mass_propagator_settings],
+                self.combined_termination_settings,
+                self.dependent_variables_to_save)
         else:
-            mass_rate_settings = {self.current_name:[propagation_setup.mass_rate.custom(self.thrust.get_mass_flow)]}
-        
-        # Create the mass rate model from the mass rate settings
-        mass_rate_models = propagation_setup.create_mass_rate_models(
-            self.bodies,
-            mass_rate_settings,
-            self.acceleration_models
-        )
-
-        # Set the initial mass
-        if self.current_stage == 1:
-            launch_mass = self.stage_1_wet_mass
-        else:
-            launch_mass = self.stage_2_wet_mass
-
-        # Define the mass propagator settings
-        mass_propagator_settings = propagation_setup.propagator.mass(
-            self.bodies_to_propagate, mass_rate_models, [launch_mass], self.combined_termination_settings)
-
-        # Define combined propagator settings including the translation and mass propagators
-        self.propagator_settings = propagation_setup.propagator.multitype(
-            [translational_propagator_settings, mass_propagator_settings],
-            self.combined_termination_settings,
-            self.dependent_variables_to_save)
+            self.propagator_settings = translational_propagator_settings
 
     def create_integrator_settings(self, fixed_step=None):
         # If specified, setup a fixed step integrator by setting the tolerance to infinity
