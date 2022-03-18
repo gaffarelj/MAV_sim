@@ -58,9 +58,34 @@ MAV_ascent_original = ascent_framework_segmented.MAV_ascent(
     powered=None
 )
 
-def run_all(dt, stage, powered):
+def run_all(dt, stage, powered=True, only_burn=False):
+    # if only_burn:
+    #     if stage == 1:
+    #         mass = SRM_thrust_model_1.M_p
+    #         SRM_thrust_model_1.simulate_full_burn(dt)
+    #         magnitude_function = SRM_thrust_model_1.magnitude_interpolator
+    #         m_dot_function = SRM_thrust_model_1.m_dot_interpolator
+    #         burn_time = SRM_thrust_model_1.saved_burn_times[-1]
+    #     elif stage == 2:
+    #         mass = SRM_thrust_model_2.M_p
+    #         SRM_thrust_model_2.simulate_full_burn(dt)
+    #         magnitude_function = SRM_thrust_model_2.magnitude_interpolator
+    #         m_dot_function = SRM_thrust_model_2.m_dot_interpolator
+    #         burn_time = SRM_thrust_model_2.saved_burn_times[-1]
+
+    #     time, m_dot = 0, 0
+    #     times, magnitudes, masses = [], [], []
+    #     while time <= burn_time:
+    #         times.append(time)
+    #         magnitudes.append(magnitude_function(time))
+    #         mass -= m_dot * dt
+    #         masses.append(mass)
+    #         m_dot = m_dot_function(time)
+    #         time += dt
+
     MAV_ascent = copy.deepcopy(MAV_ascent_original)
     MAV_ascent.powered = powered
+    MAV_ascent.dt = dt
     # Setup and run simulation for stage 1 then 2
     print("Running with dt = %.3e s, stage = %i, %s" % (dt, stage, "powered" if powered else "unpowered"))
     MAV_ascent.create_bodies(stage=stage)

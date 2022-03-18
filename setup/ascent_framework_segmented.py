@@ -71,6 +71,7 @@ class MAV_ascent:
         self.body_fixed_thrust_direction_z = body_fixed_thrust_direction_z  # Same
 
         self.powered = powered
+        self.dt = None
 
         # Load the SPICE kernel
         spice.load_standard_kernels()

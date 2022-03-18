@@ -29,7 +29,7 @@ class MAV_thrust:
             self.thrust_type = "from_geometry"
             if print_status:
                 print("Pre-simulating SRM burn...", end="\r")
-            self.thrust_model.simulate_full_burn()
+            self.thrust_model.simulate_full_burn(dt=ascent_model.dt)
             if print_status:
                 print("Pre-simulating SRM burn finished.")
             self.magnitude_function = self.thrust_model.magnitude_interpolator
