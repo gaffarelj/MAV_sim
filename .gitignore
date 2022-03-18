@@ -357,4 +357,4 @@ log.sparta
 SPARTA/setup/results_sparta/*/*.dat
 #SPARTA/setup/STL/*ASCII.stl
 #SPARTA/setup/data/data*
-setup/integrator/benchmark_sim_results/*.npz
+setup/integrator/*/*.npz
