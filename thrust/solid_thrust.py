@@ -82,6 +82,13 @@ class SRM_thrust:
         self.saved_m_dot_s = []
         self.magnitude_interpolator = None
         self.m_dot_interpolator = None
+        self.p_ratio = None
+
+    def check_At(self, r_max, T_max):
+        r_e = np.sqrt(self.A_e/np.pi)
+        too_high = r_e > r_max
+        T_t = 2 * self.T_c / (self.gamma + 1)
+        too_low = T_t > T_max
 
     def solve_p_c(self, p_c):
         # Solve equation for the chamber pressure
@@ -117,9 +124,13 @@ class SRM_thrust:
         else:
             # Compute propulsion characteristics at this time step
             self.m_dot = self.S * self.r * self.rho_p                               # [kg/s] mass flow
-            # self.m_dot = db * self.S * self.rho_p / dt
-            self.p_c = fsolve(self.solve_p_c, 1e5)[0]                               # [Pa] combustion chamber pressure
-            self.p_e = fsolve(self.solve_p_e, self.p_c/1000)[0]                     # [Pa] exhaust pressure
+            # self.p_c = fsolve(self.solve_p_c, 1e5)[0]                               # [Pa] combustion chamber pressure
+            self.p_c = (self.c_real * self.rho_p * self.a * self.S / self.A_t / 1e6)**(1/(1-self.n)) * 1e6
+            if self.p_ratio is None:
+                self.p_e = fsolve(self.solve_p_e, self.p_c/1000)[0]                     # [Pa] exhaust pressure
+                self.p_ratio = self.p_e/self.p_c
+            else:
+                self.p_e = self.p_ratio*self.p_c
             self.V_e = np.sqrt(2*self.gamma/(self.gamma-1) * self.R_A/self.M * self.T_c * (1-(self.p_e/self.p_c)**((self.gamma-1)/self.gamma)))   # [m/s] exhaust velocity
             self.F_T = self.m_dot * self.V_e + (self.p_e - self.p_a) * self.A_e     # [N] thrust
             self.F_T *= self.eta_F_T
