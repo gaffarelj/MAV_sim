@@ -50,7 +50,6 @@ class MAV_thrust:
             self.body_direction_z_function = lambda t: body_directions_z
 
         self.ascent_model = ascent_model
-        self.coasting = False
         self.first_t = None
         self.last_t = None
 
@@ -63,15 +62,11 @@ class MAV_thrust:
         self.last_t = time
 
     def is_thrust_on(self, time):
-        if self.coasting:
-            return False # Thrust is off if vehicle is coasting
-
         if self.last_t != time:
             self.compute_time_elapsed(time)
 
-        # Do not compute thrust anymore if specified burn time has elapsed
+        # There is no thrust after burn time has been reached
         if self.time_elapsed > self.burn_time:
-            self.coasting = True # If thrust is off, remember that we enter a coasting phase
             return False
         return True
 
