@@ -59,46 +59,50 @@ MAV_ascent_original = ascent_framework_segmented.MAV_ascent(
 )
 
 def run_all(dt, stage, powered=True, only_burn=False):
-    # if only_burn:
-    #     if stage == 1:
-    #         mass = SRM_thrust_model_1.M_p
-    #         SRM_thrust_model_1.simulate_full_burn(dt)
-    #         magnitude_function = SRM_thrust_model_1.magnitude_interpolator
-    #         m_dot_function = SRM_thrust_model_1.m_dot_interpolator
-    #         burn_time = SRM_thrust_model_1.saved_burn_times[-1]
-    #     elif stage == 2:
-    #         mass = SRM_thrust_model_2.M_p
-    #         SRM_thrust_model_2.simulate_full_burn(dt)
-    #         magnitude_function = SRM_thrust_model_2.magnitude_interpolator
-    #         m_dot_function = SRM_thrust_model_2.m_dot_interpolator
-    #         burn_time = SRM_thrust_model_2.saved_burn_times[-1]
+    if only_burn:
+        print("Runing stage %i burn sim with dt = %.3e" % (stage, dt))
+        if stage == 1:
+            mass = SRM_thrust_model_1.M_p
+            SRM_thrust_model_1.simulate_full_burn(dt)
+            magnitude_function = SRM_thrust_model_1.magnitude_interpolator
+            m_dot_function = SRM_thrust_model_1.m_dot_interpolator
+            burn_time = SRM_thrust_model_1.saved_burn_times[-1]
+        elif stage == 2:
+            mass = SRM_thrust_model_2.M_p
+            SRM_thrust_model_2.simulate_full_burn(dt)
+            magnitude_function = SRM_thrust_model_2.magnitude_interpolator
+            m_dot_function = SRM_thrust_model_2.m_dot_interpolator
+            burn_time = SRM_thrust_model_2.saved_burn_times[-1]
 
-    #     time, m_dot = 0, 0
-    #     times, magnitudes, masses = [], [], []
-    #     while time <= burn_time:
-    #         times.append(time)
-    #         magnitudes.append(magnitude_function(time))
-    #         mass -= m_dot * dt
-    #         masses.append(mass)
-    #         m_dot = m_dot_function(time)
-    #         time += dt
+        time, m_dot = 0, 0
+        times, magnitudes, masses = [], [], []
+        while time <= burn_time:
+            times.append(time)
+            magnitudes.append(magnitude_function(time))
+            mass -= m_dot * dt
+            masses.append(mass)
+            m_dot = m_dot_function(time)
+            time += dt
 
-    MAV_ascent = copy.deepcopy(MAV_ascent_original)
-    MAV_ascent.powered = powered
-    MAV_ascent.dt = dt
-    # Setup and run simulation for stage 1 then 2
-    print("Running with dt = %.3e s, stage = %i, %s" % (dt, stage, "powered" if powered else "unpowered"))
-    MAV_ascent.create_bodies(stage=stage)
-    MAV_ascent.create_accelerations()
-    guidance_object = ascent_framework_segmented.FakeAeroGuidance()
-    environment_setup.set_aerodynamic_guidance(guidance_object, MAV_ascent.current_body, silence_warnings=True)
-    MAV_ascent.create_initial_state()
-    MAV_ascent.create_dependent_variables_to_save(default=False)
-    MAV_ascent.dependent_variables_to_save.append(propagation_setup.dependent_variable.altitude(MAV_ascent.current_name, "Mars"))
-    MAV_ascent.create_termination_settings(end_time=25*60)
-    MAV_ascent.create_propagator_settings()
-    MAV_ascent.create_integrator_settings(fixed_step=dt)
-    times, states, dep_vars, f_evals = MAV_ascent.run_simulation(return_count=True)
+        np.savez("setup/integrator/benchmark_sim_results/thrust_%i_dt_%.4e" % (stage, dt), times=times, magnitudes=magnitudes, masses=masses)
+        print("dt = %.3e s, stage = %i -> %.3e f evals" % (dt, stage, len(masses)))
+    else:
+        MAV_ascent = copy.deepcopy(MAV_ascent_original)
+        MAV_ascent.powered = powered
+        MAV_ascent.dt = dt
+        # Setup and run simulation for stage 1 then 2
+        print("Running with dt = %.3e s, stage = %i, %s" % (dt, stage, "powered" if powered else "unpowered"))
+        MAV_ascent.create_bodies(stage=stage)
+        MAV_ascent.create_accelerations()
+        guidance_object = ascent_framework_segmented.FakeAeroGuidance()
+        environment_setup.set_aerodynamic_guidance(guidance_object, MAV_ascent.current_body, silence_warnings=True)
+        MAV_ascent.create_initial_state()
+        MAV_ascent.create_dependent_variables_to_save(default=False)
+        MAV_ascent.dependent_variables_to_save.append(propagation_setup.dependent_variable.altitude(MAV_ascent.current_name, "Mars"))
+        MAV_ascent.create_termination_settings(end_time=25*60)
+        MAV_ascent.create_propagator_settings()
+        MAV_ascent.create_integrator_settings(fixed_step=dt)
+        times, states, dep_vars, f_evals = MAV_ascent.run_simulation(return_count=True)
 
-    np.savez("setup/integrator/benchmark_sim_results/%i_%s_dt_%.4e" % (stage, "V" if powered else "X", dt), times=times, states=states, dep_vars=dep_vars, f_evals=f_evals)
-    print("dt = %.3e s, stage = %i, %s -> %.3e f evals" % (dt, stage, "powered" if powered else "unpowered", f_evals))
+        np.savez("setup/integrator/benchmark_sim_results/%i_%s_dt_%.4e" % (stage, "V" if powered else "X", dt), times=times, states=states, dep_vars=dep_vars, f_evals=f_evals)
+        print("dt = %.3e s, stage = %i, %s -> %.3e f evals" % (dt, stage, "powered" if powered else "unpowered", f_evals))

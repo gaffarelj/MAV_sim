@@ -23,12 +23,13 @@ if __name__ == "__main__":
     # Get list of timesteps for which simulations have been run
     filenames = os.listdir(sys.path[0]+"/setup/integrator/benchmark_sim_results")
     filenames.remove(".gitkeep")
-    list_dts = sorted([name.replace("%i_%s_dt_"%(current_stage, "V" if powered else "X"), "").replace(".npz", "") for name in filenames])
+    # list_dts = sorted([name.replace("%i_%s_dt_"%(current_stage, "V" if powered else "X"), "").replace(".npz", "") for name in filenames])
+    list_dts = sorted([name.replace("thrust_%i_dt_"%(current_stage), "").replace(".npz", "") for name in filenames])
         
     inputs = []
     while dt > min_dt:
         if "%.4e" % dt not in list_dts:
-            inputs.append([dt, current_stage, powered])
+            inputs.append([dt, current_stage, powered, True])
         dt = 10**(np.log10(dt) - 0.1)
 
     # Add one more input half the last dt, to compute error in the last dt
