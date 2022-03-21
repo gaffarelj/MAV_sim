@@ -37,5 +37,5 @@ if __name__ == "__main__":
 
     print("Press ENTER to run the following inputs:\n", inputs), input()
 
-    with MP.get_context("spawn").Pool(20) as pool:
+    with MP.get_context("spawn").Pool(5) as pool:
         outputs = pool.starmap(run_all, inputs)
