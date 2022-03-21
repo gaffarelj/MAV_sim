@@ -19,6 +19,7 @@ if __name__ == "__main__":
     min_dt = 1e-9
     current_stage = 1
     powered = True
+    only_thrust = False
 
     # Get list of timesteps for which simulations have been run
     filenames = os.listdir(sys.path[0]+"/setup/integrator/benchmark_sim_results")
@@ -29,7 +30,7 @@ if __name__ == "__main__":
     inputs = []
     while dt > min_dt:
         if "%.4e" % dt not in list_dts:
-            inputs.append([dt, current_stage, powered, True])
+            inputs.append([dt, current_stage, powered, only_thrust])
         dt = 10**(np.log10(dt) - 0.1)
 
     # Add one more input half the last dt, to compute error in the last dt
