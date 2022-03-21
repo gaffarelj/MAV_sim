@@ -12,6 +12,7 @@ while sys.path[0].split("/")[-1] != "MAV_sim":
 # Standard imports
 import numpy as np
 from matplotlib import pyplot as plt
+plt.switch_backend('agg')
 import os
 
 # Tudatpy imports
@@ -67,17 +68,17 @@ for i, dt in enumerate(list_dts):
     # Compute the state difference between the baseline and the current results
     # Skip the first and last 4 steps to avoid interpolation artifacts
     print("Computing difference...")
-    states_diff = util.compare_results(states_dict, baseline_states_dict, np.linspace(times[0]+4*dt, times[-1]-4*dt, 5000))
+    states_diff = util.compare_results(states_dict, baseline_states_dict, np.linspace(times[0]+4*dt, times[-1]-4*dt, 1000))
     states_diff_array = util.result2array(states_diff)
     diff_times = states_diff_array[:,0] - states_diff_array[0,0]
     if only_thrust:
-        diff_mass = states_diff_array[:,1]
-        diff_mag = states_diff_array[:,2]
+        diff_mass = np.fabs(states_diff_array[:,1])
+        diff_mag = np.fabs(states_diff_array[:,2])
         magnitude_errors.append(max(diff_mag))
     else:
-        diff_pos = np.linalg.norm(states_diff_array[:,1:4], axis=1)
-        diff_vel = np.linalg.norm(states_diff_array[:,4:7], axis=1)
-        diff_mass = states_diff_array[:,7]
+        diff_pos = np.fabs(np.linalg.norm(states_diff_array[:,1:4], axis=1))
+        diff_vel = np.fabs(np.linalg.norm(states_diff_array[:,4:7], axis=1))
+        diff_mass = np.fabs(states_diff_array[:,7])
         position_errors.append(diff_pos[-1]), velocity_errors.append(diff_vel[-1])
     mass_errors.append(max(diff_mass))
     saved_dt.append(dt)
@@ -90,15 +91,17 @@ for i, dt in enumerate(list_dts):
     
     fig, ax = plt.subplots(figsize=(10, 6))
     if only_thrust:
-        ax.plot(diff_times/60, diff_mag, label="Magnitude [N]")
-        ax.plot(diff_times/60, diff_mag, label="Mass [kg]")
+        ax.plot(diff_times, diff_mag, label="Magnitude [N]")
+        ax.plot(diff_times, diff_mag, label="Mass [kg]")
+        ax.set_xlabel("Time [s]")
     else:
         ax.plot(diff_times/60, diff_pos, label="Position [m]")
         ax.plot(diff_times/60, diff_vel, label="Velocity [m/s]")
         ax.plot(diff_times/60, diff_mag, label="Mass [kg]")
-    ax.set_xlabel("Time [min]"), ax.set_ylabel("Error")
-    plt.suptitle("State error for $\Delta$t = %.3e [s] (w.r.t. $\Delta$t = %.3e [s])" % (dt, baseline_dt))
+        ax.set_xlabel("Time [min]")
+    ax.set_ylabel("Error")
     ax.set_yscale("log")
+    plt.suptitle("State error for $\Delta$t = %.3e [s] (w.r.t. $\Delta$t = %.3e [s])" % (dt, baseline_dt))
     plt.grid(), plt.legend(), plt.tight_layout()
     plt.savefig(sys.path[0] + "/plots/setup/integrator/benchmark/error_dt_%.4e.pdf" % dt)
     plt.close()
