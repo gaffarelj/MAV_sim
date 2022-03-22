@@ -26,7 +26,7 @@ from thrust.models.multi_fin import multi_fin_SRM
 from thrust.models.spherical import spherical_SRM
 from thrust.solid_thrust import SRM_thrust
 
-def resample(x, n=1000, kind='linear'):
+def resample(x, n=5000, kind='linear'):
     f = interp1d(np.linspace(0, 1, x.size), x, kind)
     return f(np.linspace(0, 1, n))
 
@@ -69,11 +69,15 @@ def run_all(dt, stage, powered=True, only_burn=False):
     if only_burn:
         print("Runing stage %i burn sim with dt = %.3e" % (stage, dt))
         if stage == 1:
-            times, magnitudes, *_, masses = SRM_thrust_model_1.simulate_full_burn(dt)
+            times, magnitudes, *_, masses = SRM_thrust_model_1.simulate_full_burn(dt, make_interplators=False)
         elif stage == 2:
-            times, magnitudes, *_, masses = SRM_thrust_model_2.simulate_full_burn(dt)
+            times, magnitudes, *_, masses = SRM_thrust_model_2.simulate_full_burn(dt, make_interplators=False)
 
-        # times, magnitudes, masses = resample(times), resample(magnitudes), resample(masses)
+        times, magnitudes, masses = np.asarray(times), np.asarray(magnitudes), np.asarray(masses)
+
+        print(len(times), len(resample(times)))
+
+        times, magnitudes, masses = resample(times), resample(magnitudes), resample(masses)
 
         np.savez("setup/integrator/benchmark_sim_results/thrust_%i_dt_%.4e" % (stage, dt), \
             times=times, magnitudes=magnitudes, masses=masses)
