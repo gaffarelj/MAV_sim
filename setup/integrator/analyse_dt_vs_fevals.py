@@ -86,14 +86,15 @@ for i, dt in enumerate(list_dts):
         diff_pos = np.fabs(np.linalg.norm(states_diff_array[:,1:4], axis=1))
         diff_vel = np.fabs(np.linalg.norm(states_diff_array[:,4:7], axis=1))
         diff_mass = np.fabs(states_diff_array[:,7])
-        position_errors.append(diff_pos[-1]), velocity_errors.append(diff_vel[-1])
+        # position_errors.append(diff_pos[-1]), velocity_errors.append(diff_vel[-1])
+        position_errors.append(max(diff_pos)), velocity_errors.append(max(diff_vel))
     mass_errors.append(max(diff_mass))
     saved_dt.append(dt)
     if only_thrust:
-        print("With a time step of %.4e [s], stage %i, final errors: thrust magnitude of %.4e [N] / mass of %.4e [kg]" \
+        print("With a time step of %.4e [s], stage %i, max errors: thrust magnitude of %.4e [N] / mass of %.4e [kg]" \
             % (dt, current_stage, magnitude_errors[-1], mass_errors[-1]))
     else:
-        print("With a time step of %.4e [s], stage %i, %s, final errors: position of %.4e [m] / velocity of %.4e [m/s] / mass of %.4e [kg]" \
+        print("With a time step of %.4e [s], stage %i, %s, max errors: position of %.4e [m] / velocity of %.4e [m/s] / mass of %.4e [kg]" \
             % (dt, current_stage, "powered" if powered else "unpowered", position_errors[-1], velocity_errors[-1], mass_errors[-1]))
     
     fig, ax = plt.subplots(figsize=(10, 6))
