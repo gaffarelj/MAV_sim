@@ -159,6 +159,7 @@ class SRM_thrust:
                 b_s.append(self.b)
                 p_c_s.append(self.p_c)
                 #self.saved_Isp_s.append(self.I_sp)
+            if compute_dep_vars or make_interplators:
                 self.saved_m_dot_s.append(self.m_dot)
             M_p_s.append(self.M_p)
             self.saved_burn_times.append(time)
