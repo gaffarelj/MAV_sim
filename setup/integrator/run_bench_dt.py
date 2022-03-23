@@ -19,6 +19,7 @@ from scipy.interpolate import interp1d
 from tudatpy.kernel.astro import time_conversion
 from tudatpy.kernel.numerical_simulation import environment_setup
 from tudatpy.kernel.numerical_simulation import propagation_setup
+from tudatpy.kernel.math import interpolators
 
 # Custom imports
 from setup import ascent_framework_segmented
@@ -58,6 +59,7 @@ MAV_ascent_original = ascent_framework_segmented.MAV_ascent(
     body_fixed_thrust_direction_z=body_fixed_thrust_direction_z,
     powered=None
 )
+interpolator_settings = interpolators.lagrange_interpolation(8, boundary_interpolation=interpolators.use_boundary_value)
 
 def run_all(dt, stage, powered=True, only_burn=False):
 
@@ -100,7 +102,19 @@ def run_all(dt, stage, powered=True, only_burn=False):
         MAV_ascent.create_termination_settings(end_time=25*60)
         MAV_ascent.create_propagator_settings()
         MAV_ascent.create_integrator_settings(fixed_step=dt)
-        times, states, dep_vars, f_evals = MAV_ascent.run_simulation(return_count=True)
+        states, dep_vars, f_evals = MAV_ascent.run_simulation(return_raw=True, return_count=True)
+        times = np.asarray(list(states.keys()))
+        if len(times) <= 8:
+            print("Not enough time steps made with dt = %.4e (only %i)..." % (dt, len(times)))
+            np.savez("setup/integrator/benchmark_sim_results/%i_%s_dt_%.4e" % (stage, "V" if powered else "X", dt), times=None, states=None, dep_vars=None, f_evals=None)
+        else:
+            # Resample times
+            times = resample(times)
+            # Interpolate state and dep vars based on resampled times
+            states_interpolator = interpolators.create_one_dimensional_vector_interpolator(states, interpolator_settings)
+            dep_vars_interpolator = interpolators.create_one_dimensional_vector_interpolator(dep_vars, interpolator_settings)
+            states = np.asarray([states_interpolator.interpolate(epoch) for epoch in times])
+            dep_vars = np.asarray([dep_vars_interpolator.interpolate(epoch) for epoch in times])
 
-        np.savez("setup/integrator/benchmark_sim_results/%i_%s_dt_%.4e" % (stage, "V" if powered else "X", dt), times=times, states=states, dep_vars=dep_vars, f_evals=f_evals)
-        print("dt = %.3e s, stage = %i, %s -> %.3e f evals" % (dt, stage, "powered" if powered else "unpowered", f_evals))
+            np.savez("setup/integrator/benchmark_sim_results/%i_%s_dt_%.4e" % (stage, "V" if powered else "X", dt), times=times, states=states, dep_vars=dep_vars, f_evals=f_evals)
+            print("dt = %.3e s, stage = %i, %s -> %.3e f evals" % (dt, stage, "powered" if powered else "unpowered", f_evals))
