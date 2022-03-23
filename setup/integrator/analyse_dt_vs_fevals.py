@@ -64,6 +64,9 @@ for i, dt in enumerate(list_dts):
         except ValueError:
             print("Stopping, not enough data points in current propagation...")
             break
+        if times is None:
+            print("Stopping, not enough data points in current propagation...")
+            break
         states_dict = {times[i]: states[i] for i in range(len(times))}
     # Break the loop if there are less than 8 data points (not possible for Lagrange interpolator and bad results anyways)
     if len(times) < 8:
