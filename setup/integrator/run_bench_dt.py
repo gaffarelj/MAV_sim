@@ -73,15 +73,14 @@ def run_all(dt, stage, powered=True, only_burn=False):
         elif stage == 2:
             times, magnitudes, *_, masses = SRM_thrust_model_2.simulate_full_burn(dt, make_interplators=False)
 
+        fevals = len(times)
         times, magnitudes, masses = np.asarray(times), np.asarray(magnitudes), np.asarray(masses)
-
-        print(len(times), len(resample(times)))
 
         times, magnitudes, masses = resample(times), resample(magnitudes), resample(masses)
 
         np.savez("setup/integrator/benchmark_sim_results/thrust_%i_dt_%.4e" % (stage, dt), \
             times=times, magnitudes=magnitudes, masses=masses)
-        print("dt = %.3e s, stage = %i -> %.3e f evals" % (dt, stage, len(masses)))
+        print("dt = %.3e s, stage = %i -> %.3e f evals" % (dt, stage, fevals))
     else:
         MAV_ascent = copy.deepcopy(MAV_ascent_original)
         MAV_ascent.stage_1_wet_mass = mass_1
