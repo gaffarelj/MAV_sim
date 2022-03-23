@@ -19,13 +19,15 @@ if __name__ == "__main__":
     min_dt = 1e-9
     current_stage = 1
     powered = True
-    only_thrust = True
+    only_thrust = False
 
     # Get list of timesteps for which simulations have been run
     filenames = os.listdir(sys.path[0]+"/setup/integrator/benchmark_sim_results")
     filenames.remove(".gitkeep")
-    # list_dts = sorted([name.replace("%i_%s_dt_"%(current_stage, "V" if powered else "X"), "").replace(".npz", "") for name in filenames])
-    list_dts = sorted([name.replace("thrust_%i_dt_"%(current_stage), "").replace(".npz", "") for name in filenames])
+    if only_thrust:
+        list_dts = sorted([name.replace("thrust_%i_dt_"%(current_stage), "").replace(".npz", "") for name in filenames])
+    else:
+        list_dts = sorted([name.replace("%i_%s_dt_"%(current_stage, "V" if powered else "X"), "").replace(".npz", "") for name in filenames])
         
     inputs = []
     while dt > min_dt:
@@ -34,9 +36,11 @@ if __name__ == "__main__":
         dt = 10**(np.log10(dt) - 0.1)
 
     # Add one more input half the last dt, to compute error in the last dt
-    inputs.append([inputs[-1][0]*0.49, current_stage, powered, only_thrust])
+    half_dt = inputs[-1][0]*0.49
+    if "%.4e" % half_dt not in list_dts:
+        inputs.append([half_dt, current_stage, powered, only_thrust])
 
     print("Press ENTER to run the following inputs:\n", inputs), input()
 
-    with MP.get_context("spawn").Pool(6) as pool:
+    with MP.get_context("spawn").Pool(4) as pool:
         outputs = pool.starmap(run_all, inputs)
