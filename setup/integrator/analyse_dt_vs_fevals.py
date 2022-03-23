@@ -20,7 +20,7 @@ from tudatpy import util
 
 current_stage = 1
 powered = True
-only_thrust = True
+only_thrust = False
 
 # Get list of timesteps for which simulations have been run
 filenames = os.listdir(sys.path[0]+"/setup/integrator/benchmark_sim_results")
@@ -59,7 +59,11 @@ for i, dt in enumerate(list_dts):
         times, masses, magnitudes = get_sim_results(dt)
         states_dict = {times[i]: [masses[i], magnitudes[i]] for i in range(len(times))}
     else:
-        times, states, dep_vars, f_evals = get_sim_results(dt)
+        try:
+            times, states, dep_vars, f_evals = get_sim_results(dt)
+        except ValueError:
+            print("Stopping, not enough data points in current propagation...")
+            break
         states_dict = {times[i]: states[i] for i in range(len(times))}
     # Break the loop if there are less than 8 data points (not possible for Lagrange interpolator and bad results anyways)
     if len(times) < 8:
@@ -97,7 +101,7 @@ for i, dt in enumerate(list_dts):
     else:
         ax.plot(diff_times/60, diff_pos, label="Position [m]")
         ax.plot(diff_times/60, diff_vel, label="Velocity [m/s]")
-        ax.plot(diff_times/60, diff_mag, label="Mass [kg]")
+        ax.plot(diff_times/60, diff_mass, label="Mass [kg]")
         ax.set_xlabel("Time [min]")
     ax.set_ylabel("Error")
     ax.set_yscale("log")
