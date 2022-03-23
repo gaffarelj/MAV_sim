@@ -66,9 +66,9 @@ for i, dt in enumerate(list_dts):
         print("Stopping, not enough data points in current propagation...")
         break
     # Compute the state difference between the baseline and the current results
-    # Skip the first and last 4 steps to avoid interpolation artifacts
+    # Skip the first and last 10 steps to avoid interpolation artifacts
     print("Computing difference...")
-    states_diff = util.compare_results(states_dict, baseline_states_dict, np.linspace(times[0]+4*dt, times[-1]-4*dt, 1000))
+    states_diff = util.compare_results(states_dict, baseline_states_dict, np.linspace(times[0]+10*dt, times[-1]-10*dt, 1000))
     states_diff_array = util.result2array(states_diff)
     diff_times = states_diff_array[:,0] - states_diff_array[0,0]
     if only_thrust:
@@ -92,7 +92,7 @@ for i, dt in enumerate(list_dts):
     fig, ax = plt.subplots(figsize=(10, 6))
     if only_thrust:
         ax.plot(diff_times, diff_mag, label="Magnitude [N]")
-        ax.plot(diff_times, diff_mag, label="Mass [kg]")
+        ax.plot(diff_times, diff_mass, label="Mass [kg]")
         ax.set_xlabel("Time [s]")
     else:
         ax.plot(diff_times/60, diff_pos, label="Position [m]")
