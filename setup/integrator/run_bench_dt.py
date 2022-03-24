@@ -32,8 +32,6 @@ def resample(x, n=5000, kind='linear'):
     return f(np.linspace(0, 1, n))
 
 t0 = time_conversion.julian_day_to_seconds_since_epoch(time_conversion.calendar_date_to_julian_day(datetime(2031, 2, 17)))
-SRM_stage_1 = multi_fin_SRM(R_o=0.24, R_i=0.175, N_f=20, w_f=0.02, L_f=0.05, L=1.05)
-SRM_stage_2 = spherical_SRM(R_o=0.165, R_i=0.0915)
 body_fixed_thrust_direction_y = [
     [0, 0.05, 0.1, 0, 0.05],
     0
@@ -42,31 +40,34 @@ body_fixed_thrust_direction_z = [
     [0, -0.05, 0.0, 0.05, 0.05],
     0
 ]
-# Define default ascent model
-MAV_ascent_original = ascent_framework_segmented.MAV_ascent(
-    launch_epoch = t0,    # MAV-­LL­-01
-    launch_lat = np.deg2rad(18.85),     # MAV­-LL-­03
-    launch_lon = np.deg2rad(77.52),     # MAV­-LL-­03
-    launch_h = -2.5e3,                  # MAV­-LL-­04
-    mass_stages = [None, None],            
-    launch_angles = [np.deg2rad(57.5), np.deg2rad(90)],       # MAV­-LL-­06 + guesstimate # angle is w.r.t vertical
-    thrust_models = [None, None],
-    target_orbit_h = 300e3,             # MAV­-OSO­-01
-    target_orbit_i = np.deg2rad(25),    # MAV­-OSO­-03
-    max_a = 15 * 9.80665,               # MAV­-LL-­02
-    max_AoA = np.deg2rad(4),            # MAV­-LL-­05
-    body_fixed_thrust_direction_y=body_fixed_thrust_direction_y,
-    body_fixed_thrust_direction_z=body_fixed_thrust_direction_z,
-    powered=None
-)
 interpolator_settings = interpolators.lagrange_interpolation(8, boundary_interpolation=interpolators.use_boundary_value)
 
 def run_all(dt, stage, powered=True, only_burn=False):
 
+    SRM_stage_1 = multi_fin_SRM(R_o=0.24, R_i=0.175, N_f=20, w_f=0.02, L_f=0.05, L=1.05)
+    SRM_stage_2 = spherical_SRM(R_o=0.165, R_i=0.0915)
     SRM_thrust_model_1 = SRM_thrust(SRM_stage_1, A_t=0.065, epsilon=45)
     SRM_thrust_model_2 = SRM_thrust(SRM_stage_2, A_t=0.005, epsilon=73, p_a=0)
     mass_2 = 47.5 + SRM_thrust_model_2.M_innert + SRM_thrust_model_2.M_p
     mass_1 = 65 + mass_2 + SRM_thrust_model_1.M_innert + SRM_thrust_model_1.M_p
+
+    # Define default ascent model
+    MAV_ascent = ascent_framework_segmented.MAV_ascent(
+        launch_epoch = t0,    # MAV-­LL­-01
+        launch_lat = np.deg2rad(18.85),     # MAV­-LL-­03
+        launch_lon = np.deg2rad(77.52),     # MAV­-LL-­03
+        launch_h = -2.5e3,                  # MAV­-LL-­04
+        mass_stages = [mass_1, mass_2],            
+        launch_angles = [np.deg2rad(57.5), np.deg2rad(90)],       # MAV­-LL-­06 + guesstimate # angle is w.r.t vertical
+        thrust_models = [SRM_thrust_model_1, SRM_thrust_model_2],
+        target_orbit_h = 300e3,             # MAV­-OSO­-01
+        target_orbit_i = np.deg2rad(25),    # MAV­-OSO­-03
+        max_a = 15 * 9.80665,               # MAV­-LL-­02
+        max_AoA = np.deg2rad(4),            # MAV­-LL-­05
+        body_fixed_thrust_direction_y=body_fixed_thrust_direction_y,
+        body_fixed_thrust_direction_z=body_fixed_thrust_direction_z,
+        powered=powered
+    )
 
     if only_burn:
         print("Runing stage %i burn sim with dt = %.3e" % (stage, dt))
@@ -84,11 +85,6 @@ def run_all(dt, stage, powered=True, only_burn=False):
             times=times, magnitudes=magnitudes, masses=masses)
         print("dt = %.3e s, stage = %i -> %.3e f evals" % (dt, stage, fevals))
     else:
-        MAV_ascent = copy.deepcopy(MAV_ascent_original)
-        MAV_ascent.stage_1_wet_mass = mass_1
-        MAV_ascent.stage_2_wet_mass = mass_2
-        MAV_ascent.thrust_models = [SRM_thrust_model_1, SRM_thrust_model_2]
-        MAV_ascent.powered = powered
         MAV_ascent.dt = dt
         # Setup and run simulation for stage 1 then 2
         print("Running with dt = %.3e s, stage = %i, %s" % (dt, stage, "powered" if powered else "unpowered"))
