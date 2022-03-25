@@ -148,28 +148,39 @@ class SRM_thrust:
         # Return the thrust
         return self.F_T
 
-    def simulate_full_burn(self, dt=0.01, compute_dep_vars=False, make_interplators=True):
+    def simulate_full_burn(self, dt=0.01, compute_dep_vars=False, make_interplators=True, filename=None):
         b_s, p_c_s, M_p_s = [], [], []
-        time = 0
-        # Keep computing thrust until the magnitude settles to 0
-        while time == 0 or np.sum(self.saved_magnitudes[-2:]) != 0:
-            F_T = self.compute_magnitude(time)
-            self.saved_magnitudes.append(F_T)
-            if compute_dep_vars:
-                b_s.append(self.b)
-                p_c_s.append(self.p_c)
-                #self.saved_Isp_s.append(self.I_sp)
-            if compute_dep_vars or make_interplators:
-                self.saved_m_dot_s.append(self.m_dot)
-            M_p_s.append(self.M_p)
-            self.saved_burn_times.append(time)
-            time += dt
+        if filename is None:
+            time = 0
+            # Keep computing thrust until the magnitude settles to 0
+            while time == 0 or np.sum(self.saved_magnitudes[-2:]) != 0:
+                F_T = self.compute_magnitude(time)
+                self.saved_magnitudes.append(F_T)
+                if compute_dep_vars:
+                    b_s.append(self.b)
+                    p_c_s.append(self.p_c)
+                    #self.saved_Isp_s.append(self.I_sp)
+                if compute_dep_vars or make_interplators:
+                    self.saved_m_dot_s.append(self.m_dot)
+                M_p_s.append(self.M_p)
+                self.saved_burn_times.append(time)
+                time += dt
 
-        if make_interplators:
+            if make_interplators:
+                self.magnitude_interpolator = interp1d(self.saved_burn_times, self.saved_magnitudes)
+                self.m_dot_interpolator = interp1d(self.saved_burn_times, self.saved_m_dot_s)
+
+            return self.saved_burn_times, self.saved_magnitudes, b_s, p_c_s, M_p_s
+        else:
+            thrust_results = np.load(filename)
+            self.saved_burn_times, self.saved_magnitudes, masses = thrust_results["times"], thrust_results["magnitudes"], thrust_results["masses"]
+            self.saved_m_dot_s = list(np.diff(masses))
+            self.saved_m_dot_s.append(self.saved_m_dot_s[-1])
+            
             self.magnitude_interpolator = interp1d(self.saved_burn_times, self.saved_magnitudes)
             self.m_dot_interpolator = interp1d(self.saved_burn_times, self.saved_m_dot_s)
 
-        return self.saved_burn_times, self.saved_magnitudes, b_s, p_c_s, M_p_s
+            return self.saved_burn_times, self.saved_magnitudes, b_s, p_c_s, masses
 
 if __name__ == "__main__":
     from thrust.models.multi_fin import multi_fin_SRM
