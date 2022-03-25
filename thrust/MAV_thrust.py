@@ -16,7 +16,7 @@ from thrust.solid_thrust import SRM_thrust
 
 class MAV_thrust:
 
-    def __init__(self, ascent_model, angle, thrust_model, body_directions_y=0, body_directions_z=0, print_status=False):
+    def __init__(self, ascent_model, angle, thrust_model, body_directions_y=0, body_directions_z=0, print_status=False, dt=0.01, thrust_filename=None):
         self.angle = angle
         self.thrust_model = thrust_model
 
@@ -29,7 +29,7 @@ class MAV_thrust:
             self.thrust_type = "from_geometry"
             if print_status:
                 print("Pre-simulating SRM burn...", end="\r")
-            self.thrust_model.simulate_full_burn(dt=ascent_model.dt)
+            self.thrust_model.simulate_full_burn(dt=dt, filename=thrust_filename)
             if print_status:
                 print("Pre-simulating SRM burn finished.")
             self.magnitude_function = self.thrust_model.magnitude_interpolator

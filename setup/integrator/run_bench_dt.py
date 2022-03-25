@@ -14,6 +14,7 @@ import numpy as np
 from datetime import datetime
 import copy
 from scipy.interpolate import interp1d
+import glob
 
 # Tudatpy imports
 from tudatpy.kernel.astro import time_conversion
@@ -89,7 +90,8 @@ def run_all(dt, stage, powered=True, only_burn=False):
         # Setup and run simulation for stage 1 then 2
         print("Running with dt = %.3e s, stage = %i, %s" % (dt, stage, "powered" if powered else "unpowered"))
         MAV_ascent.create_bodies(stage=stage)
-        MAV_ascent.create_accelerations()
+        thrust_filename = glob.glob(sys.path[0]+"/data/best_integrator_dt/thrust_%i_dt_*.npz"%stage)[0]
+        MAV_ascent.create_accelerations(thrust_filename=thrust_filename)
         guidance_object = ascent_framework_segmented.FakeAeroGuidance()
         environment_setup.set_aerodynamic_guidance(guidance_object, MAV_ascent.current_body, silence_warnings=True)
         MAV_ascent.create_initial_state()
