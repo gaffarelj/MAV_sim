@@ -124,7 +124,7 @@ if only_thrust:
 else:
     ax.plot(saved_dt, position_errors, marker="o", linewidth=1.5, label="Position [m]")
     ax.plot(saved_dt, velocity_errors, marker="o", linewidth=1.5, label="Velocity [m/s]")
-    # ax.plot(saved_dt, mass_errors, marker="o", linewidth=1.5, label="Mass [kg]")
+    ax.plot(saved_dt, mass_errors, marker="o", linewidth=1.5, label="Mass [kg]")
 ax.set_xlabel("Time step [s]"), ax.set_ylabel("Maximum error")
 ax.set_xscale("log"), ax.set_yscale("log")
 plt.grid(), plt.legend(), plt.tight_layout()
