@@ -90,11 +90,16 @@ def run_all(dt, stage, powered=True, only_burn=False):
         # Setup and run simulation for stage 1 then 2
         print("Running with dt = %.3e s, stage = %i, %s" % (dt, stage, "powered" if powered else "unpowered"))
         MAV_ascent.create_bodies(stage=stage)
-        thrust_filename = glob.glob(sys.path[0]+"/data/best_integrator_dt/thrust_%i_dt_*.npz"%stage)[0]
+        thrust_filename = None
+        if powered:
+            thrust_filename = glob.glob(sys.path[0]+"/data/best_integrator_dt/thrust_%i_dt_*.npz"%stage)[0]
         MAV_ascent.create_accelerations(thrust_filename=thrust_filename)
         guidance_object = ascent_framework_segmented.FakeAeroGuidance()
         environment_setup.set_aerodynamic_guidance(guidance_object, MAV_ascent.current_body, silence_warnings=True)
-        MAV_ascent.create_initial_state()
+        last_state_fname = None
+        if not powered:
+            last_state_fname = glob.glob(sys.path[0]+"/data/best_integrator_dt/%i_V_dt_*.npz"%stage)[0]
+        MAV_ascent.create_initial_state(last_state_fname)
         MAV_ascent.create_dependent_variables_to_save(default=False)
         MAV_ascent.dependent_variables_to_save.append(propagation_setup.dependent_variable.altitude(MAV_ascent.current_name, "Mars"))
         MAV_ascent.create_termination_settings(end_time=25*60)

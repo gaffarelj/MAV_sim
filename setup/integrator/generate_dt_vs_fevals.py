@@ -15,10 +15,10 @@ if __name__ == "__main__":
     from setup.integrator.run_bench_dt import run_all
 
     # Define maximum time step to use
-    dt = 9.95 # (do no use an int to avoid artifacts with perfect numerical values)
+    dt = 9.95e2 # (do no use an int to avoid artifacts with perfect numerical values)
     min_dt = 1e-9
     current_stage = 1
-    powered = True
+    powered = False
     only_thrust = False
 
     # Get list of timesteps for which simulations have been run

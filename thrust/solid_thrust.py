@@ -23,7 +23,7 @@ class SRM_thrust:
         epsilon=50.2,   # [-] area ratio (exhaust/throat)
         T_c=3645,       # [K] chamber temperature (https://ieeexplore-ieee-org.tudelft.idm.oclc.org/document/8742205)
         p_a=650*0.4,    # [Pa] ambient pressure (650Pa = "Sea level" on Mars)
-        a=0.004202,     # [m/s/MPa^n] burning rate coefficient (to use with pressure in MPa)
+        a=5.8e-5,  # [m/s/MPa^n] burning rate coefficient (to use with pressure in MPa) (=0.004202/10**(6*0.31))
         n=0.31,         # [-] burning rate exponent (to use with pressure in MPa)
         rho_p=1854.5,   # [kg/m3] propellant density
         M=0.02414,      # [kg/mol] propellant molar mass FROM CEA # Air Launch versus Ground Launch: a Multidisciplinary Design Optimization Study of Expendable Launch Vehicles on Cost and Performance
@@ -93,7 +93,7 @@ class SRM_thrust:
     def solve_p_c(self, p_c):
         # Solve equation for the chamber pressure
         rho_c = (p_c*self.M/self.R_A/self.T_c)  # [kg/m3] chamber density
-        return (self.c_real * (self.rho_p - rho_c) * self.a * self.S / self.A_t / 1e6)**(1/(1-self.n)) * 1e6 - p_c
+        return (self.c_real * (self.rho_p - rho_c) * self.a * self.S / self.A_t)**(1/(1-self.n)) - p_c
 
     def solve_p_e(self, p_e):
         # Solve equation for the exhaust pressure
@@ -125,7 +125,7 @@ class SRM_thrust:
             # Compute propulsion characteristics at this time step
             self.m_dot = self.S * self.r * self.rho_p                               # [kg/s] mass flow
             # self.p_c = fsolve(self.solve_p_c, 1e5)[0]                               # [Pa] combustion chamber pressure
-            self.p_c = (self.c_real * self.rho_p * self.a * self.S / self.A_t / 1e6)**(1/(1-self.n)) * 1e6
+            self.p_c = (self.c_real * self.rho_p * self.a * self.S / self.A_t)**(1/(1-self.n))
             if self.p_ratio is None:
                 self.p_e = fsolve(self.solve_p_e, self.p_c/1000)[0]                     # [Pa] exhaust pressure
                 self.p_ratio = self.p_e/self.p_c
@@ -136,7 +136,7 @@ class SRM_thrust:
             self.F_T *= self.eta_F_T
 
             # Update the regression rate
-            self.r = self.a * (self.p_c/1e6) ** self.n    # [m/s]
+            self.r = self.a * (self.p_c) ** self.n    # [m/s]
 
             # Update the propellant mass
             self.M_p -= self.m_dot * dt
@@ -181,23 +181,3 @@ class SRM_thrust:
             self.m_dot_interpolator = interp1d(self.saved_burn_times, self.saved_m_dot_s)
 
             return self.saved_burn_times, self.saved_magnitudes, b_s, p_c_s, masses
-
-if __name__ == "__main__":
-    from thrust.models.multi_fin import multi_fin_SRM
-    test_geometry = multi_fin_SRM(R_o=0.24, R_i=0.175, N_f=20, w_f=0.02, L_f=0.05, L=1.05)
-    import matplotlib.pyplot as plt
-
-    for dt in [1e-1, 1e-3, 1e-5]:
-
-        SRM_thrust_model_test = SRM_thrust(test_geometry, A_t=0.065, epsilon=45)
-
-        times, magnitudes, b_s, p_c_s, M_p_s = SRM_thrust_model_test.simulate_full_burn(dt)
-
-        plt.plot(times, np.array(magnitudes)/1e3, label="%.3e"%dt)
-        print(dt)
-
-    plt.grid()
-    plt.xlabel("Time [s]"), plt.ylabel("Magnitude [kN]")
-    plt.legend()
-    plt.tight_layout()
-    plt.show()
