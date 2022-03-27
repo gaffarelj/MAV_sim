@@ -32,7 +32,7 @@ def resample(x, n=5000, kind='linear'):
     f = interp1d(np.linspace(0, 1, x.size), x, kind)
     return f(np.linspace(0, 1, n))
 
-t0 = time_conversion.julian_day_to_seconds_since_epoch(time_conversion.calendar_date_to_julian_day(datetime(2031, 2, 17)))
+t0 = 0 #time_conversion.julian_day_to_seconds_since_epoch(time_conversion.calendar_date_to_julian_day(datetime(2031, 2, 17)))
 body_fixed_thrust_direction_y = [
     [0, 0.05, 0.1, 0, 0.05],
     0
