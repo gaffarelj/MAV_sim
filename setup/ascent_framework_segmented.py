@@ -172,9 +172,16 @@ class MAV_ascent:
             self.bodies, acceleration_dict, self.bodies_to_propagate, self.central_bodies
         )
 
-    def create_initial_state(self):
+    def create_initial_state(self, filename=None):
+        if filename is not None:
+            thrust_results = np.load(filename)
+            final_state = thrust_results["states"][-1]
+            self.initial_epoch = thrust_results["times"][-1]
+            self.current_body.set_constant_mass(final_state[-1])
+            # Set the second stage initial state as the last one from the first stage (ignoring mass)
+            self.initial_state = final_state[:6]
         # If we are with the first stage, use the defined initial state
-        if self.current_stage == 1:
+        elif self.current_stage == 1:
             # Set the initial epoch as the user-specified launch epoch
             self.initial_epoch = self.launch_epoch
 
@@ -232,7 +239,7 @@ class MAV_ascent:
             use_as_lower_limit=True,
             terminate_exactly_on_final_condition=True,
             termination_root_finder_settings=root_finders.secant(
-                maximum_iteration=5,
+                maximum_iteration=7,
                 maximum_iteration_handling=root_finders.MaximumIterationHandling.accept_result)
             )
         elif self.current_stage == 2:
