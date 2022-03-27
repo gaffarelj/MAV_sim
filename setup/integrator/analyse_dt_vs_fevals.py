@@ -19,7 +19,7 @@ import os
 from tudatpy import util
 
 current_stage = 1
-powered = True
+powered = False
 only_thrust = False
 
 # Get list of timesteps for which simulations have been run
@@ -85,17 +85,22 @@ for i, dt in enumerate(list_dts):
     else:
         diff_pos = np.fabs(np.linalg.norm(states_diff_array[:,1:4], axis=1))
         diff_vel = np.fabs(np.linalg.norm(states_diff_array[:,4:7], axis=1))
-        diff_mass = np.fabs(states_diff_array[:,7])
+        if powered:
+            diff_mass = np.fabs(states_diff_array[:,7])
         # position_errors.append(diff_pos[-1]), velocity_errors.append(diff_vel[-1])
         position_errors.append(max(diff_pos)), velocity_errors.append(max(diff_vel))
-    mass_errors.append(max(diff_mass))
+    if powered:
+        mass_errors.append(max(diff_mass))
     saved_dt.append(dt)
     if only_thrust:
         print("With a time step of %.4e [s], stage %i, max errors: thrust magnitude of %.4e [N] / mass of %.4e [kg]" \
             % (dt, current_stage, magnitude_errors[-1], mass_errors[-1]))
-    else:
+    elif powered:
         print("With a time step of %.4e [s], stage %i, %s, max errors: position of %.4e [m] / velocity of %.4e [m/s] / mass of %.4e [kg]" \
             % (dt, current_stage, "powered" if powered else "unpowered", position_errors[-1], velocity_errors[-1], mass_errors[-1]))
+    else:
+        print("With a time step of %.4e [s], stage %i, %s, max errors: position of %.4e [m] / velocity of %.4e [m/s]" \
+            % (dt, current_stage, "powered" if powered else "unpowered", position_errors[-1], velocity_errors[-1]))
     
     fig, ax = plt.subplots(figsize=(10, 6))
     if only_thrust:
@@ -105,7 +110,8 @@ for i, dt in enumerate(list_dts):
     else:
         ax.plot(diff_times/60, diff_pos, label="Position [m]")
         ax.plot(diff_times/60, diff_vel, label="Velocity [m/s]")
-        ax.plot(diff_times/60, diff_mass, label="Mass [kg]")
+        if powered:
+            ax.plot(diff_times/60, diff_mass, label="Mass [kg]")
         ax.set_xlabel("Time [min]")
     ax.set_ylabel("Error")
     ax.set_yscale("log")
@@ -124,9 +130,9 @@ if only_thrust:
 else:
     ax.plot(saved_dt, position_errors, marker="o", linewidth=1.5, label="Position [m]")
     ax.plot(saved_dt, velocity_errors, marker="o", linewidth=1.5, label="Velocity [m/s]")
-    ax.plot(saved_dt, mass_errors, marker="o", linewidth=1.5, label="Mass [kg]")
+    if powered:
+        ax.plot(saved_dt, mass_errors, marker="o", linewidth=1.5, label="Mass [kg]")
 ax.set_xlabel("Time step [s]"), ax.set_ylabel("Maximum error")
 ax.set_xscale("log"), ax.set_yscale("log")
 plt.grid(), plt.legend(), plt.tight_layout()
 plt.savefig(sys.path[0] + "/plots/setup/integrator/benchmark/dt_vs_error.pdf")
-# plt.show()
