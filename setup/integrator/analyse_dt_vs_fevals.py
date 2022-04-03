@@ -75,7 +75,8 @@ for i, dt in enumerate(list_dts):
     # Compute the state difference between the baseline and the current results
     # Skip the first and last 10 steps to avoid interpolation artifacts
     print("Computing difference...")
-    states_diff = util.compare_results(states_dict, baseline_states_dict, np.linspace(times[0]+10*dt, times[-1]-10*dt, 1000))
+    max_time = min(times[-1], baseline_times[-1])
+    states_diff = util.compare_results(states_dict, baseline_states_dict, np.linspace(times[0]+10*dt, max_time-10*dt, 1000))
     states_diff_array = util.result2array(states_diff)
     diff_times = states_diff_array[:,0] - states_diff_array[0,0]
     if only_thrust:
