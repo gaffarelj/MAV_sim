@@ -231,7 +231,7 @@ class MAV_ascent:
         # For the first stage, terminate at apogee or below a certain altitude
         if self.powered:
             self.combined_termination_settings = propagation_setup.propagator.time_termination(
-                self.launch_epoch + self.thrust.burn_time,
+                self.initial_epoch + self.thrust.burn_time,
                 terminate_exactly_on_final_condition=True)
 
         elif self.current_stage == 1:
