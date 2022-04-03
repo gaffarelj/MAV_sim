@@ -56,7 +56,7 @@ class anchor_SRM:
         A7 = 0.5 * (np.pi/2 + np.arcsin((self.w+self.r_f)/(self.R_o-self.w-self.r_f)))*self.r_f**2
         return (np.pi * self.R_o**2 - 2 * self.N_a * (A1+A2+A3+A4+A5+A6+A7) ) * self.L
 
-    def burning_S(self, b):
+    def burning_S(self, b, return_perimeters=False):
         # First, check the validity of the given burnt thickness
         self.check_b(b)
         
@@ -96,7 +96,10 @@ class anchor_SRM:
         if b <= self.w:
             P7 = (self.R_o-self.w+b) * (np.pi/self.N_a - np.arcsin( (self.r_f+self.w)/(self.R_o-self.w-self.r_f) ))
 
-        return (P1+P2+P3+P4+P5+P6+P7) * 2 * self.N_a * self.L
+        A = (P1+P2+P3+P4+P5+P6+P7) * 2 * self.N_a * self.L
+        if return_perimeters:
+            return [P1, P2, P3, P4, P5, P6, P7], A
+        return A
 
     def plot_geometry(self, b=0, final_b=None, ax_in=None):
         # First, check the validity of the given burnt thickness
@@ -203,3 +206,56 @@ class anchor_SRM:
         return """Anchor SRM geometry with
         $L = %.3f$ [m], $R_o = %.3f$ [m], $R_i = %.3f$ [m], $N_a = %i$ [-], $w = %.3f$ [m], $r_f = %.3f$ [m], $\delta_s = %.3f$ [m]""" \
         % (self.L, self.R_o, self.R_i, self.N_a, self.w, self.r_f, self.delta_s)
+
+
+if __name__ == "__main__":
+    from matplotlib import pyplot as plt
+
+    # Define geometry from DOI: 10.2514/6.2008-4697
+    anchor_verif = anchor_SRM(
+        R_o=1.0,
+        R_i=0.25,
+        N_a=3,
+        w=0.2,
+        r_f=0.035,
+        delta_s=0.12,
+        L=1.0 # Set to 1 so the Area equals the Perimeter
+    )
+
+    # Plot the initial geometry
+    anchor_verif.plot_geometry()
+    plt.show()
+
+    # Compute the burning area as a function of the burned distance
+    P_s, b_s = [], []
+    P_segments = []
+    for b in np.arange(0, 1, 0.001):
+        try:
+            perimeters, A = anchor_verif.burning_S(b, True)
+            P_segments.append(perimeters)
+            P_s.append(A)
+        except ValueError:
+            break
+        b_s.append(b)
+
+    P_segments = np.array(P_segments).T
+
+    # Plot the burning Perimeter as a function of the burned distance
+    fig = plt.subplots(figsize=(8, 4))
+    plt.plot(b_s, P_s)
+    plt.xlim(0, 0.38), plt.ylim(0, 13)
+    plt.xlabel("Burned distance [m]"), plt.ylabel("Burning Perimeter [m]")
+    plt.grid()
+    plt.tight_layout()
+    plt.show()
+
+    # Plot the burning perimeter segments as a function of the burned distance
+    fig = plt.subplots(figsize=(8, 4))
+    for i, perimeters in enumerate(P_segments):
+        plt.plot(b_s, perimeters, label="Segment %i" % i)
+    plt.xlabel("Burned distance [m]"), plt.ylabel("Burning Perimeter [m]")
+    plt.xlim(0, 0.36), plt.ylim(0, 0.8)
+    plt.grid()
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
