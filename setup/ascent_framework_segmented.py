@@ -174,10 +174,12 @@ class MAV_ascent:
 
     def create_initial_state(self, filename=None):
         if filename is not None:
-            thrust_results = np.load(filename)
-            final_state = thrust_results["states"][-1]
-            self.initial_epoch = thrust_results["times"][-1]
-            self.current_body.set_constant_mass(final_state[-1])
+            saved_results = np.load(filename)
+            final_state = saved_results["states"][-1]
+            self.initial_epoch = saved_results["times"][-1]
+            # Set the body initial mass if the vehicle is un-powered (otherwise keep wet mass that was set in create_bodies)
+            if not self.powered: 
+                self.current_body.set_constant_mass(final_state[-1])
             # Set the second stage initial state as the last one from the first stage (ignoring mass)
             self.initial_state = final_state[:6]
         # If we are with the first stage, use the defined initial state
