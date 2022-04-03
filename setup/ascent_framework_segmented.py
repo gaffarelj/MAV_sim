@@ -239,7 +239,7 @@ class MAV_ascent:
             use_as_lower_limit=True,
             terminate_exactly_on_final_condition=True,
             termination_root_finder_settings=root_finders.secant(
-                maximum_iteration=7,
+                maximum_iteration=5,
                 maximum_iteration_handling=root_finders.MaximumIterationHandling.accept_result)
             )
         elif self.current_stage == 2:
