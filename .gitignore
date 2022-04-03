@@ -358,3 +358,4 @@ SPARTA/setup/results_sparta/*/*.dat
 #SPARTA/setup/STL/*ASCII.stl
 #SPARTA/setup/data/data*
 setup/integrator/*/*.npz
+plots/setup/integrator/*/*error*.pdf
