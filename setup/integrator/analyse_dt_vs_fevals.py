@@ -19,7 +19,7 @@ import os
 from tudatpy import util
 
 current_stage = 1
-powered = False
+powered = True
 only_thrust = False
 
 # Get list of timesteps for which simulations have been run
