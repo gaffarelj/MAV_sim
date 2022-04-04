@@ -176,7 +176,7 @@ class SRM_thrust:
             self.saved_burn_times, self.saved_magnitudes, masses = thrust_results["times"], thrust_results["magnitudes"], thrust_results["masses"]
             mass_diff = np.asarray(np.diff(masses))
             time_diff = np.asarray(np.diff(self.saved_burn_times))
-            self.saved_m_dot_s = mass_diff/time_diff
+            self.saved_m_dot_s = list(mass_diff/time_diff)
             self.saved_m_dot_s.append(self.saved_m_dot_s[-1])
             
             self.magnitude_interpolator = interp1d(self.saved_burn_times, self.saved_magnitudes)
