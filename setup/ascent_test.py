@@ -60,7 +60,7 @@ body_fixed_thrust_direction_z = [
 ]
 
 MAV_ascent = ascent_framework.MAV_ascent(
-    launch_epoch = time_conversion.julian_day_to_seconds_since_epoch(time_conversion.calendar_date_to_julian_day(datetime(2031, 2, 17))),    # MAV-­LL­-01
+    launch_epoch = 0,#time_conversion.julian_day_to_seconds_since_epoch(time_conversion.calendar_date_to_julian_day(datetime(2031, 2, 17))),    # MAV-­LL­-01
     launch_lat = np.deg2rad(18.85),     # MAV­-LL-­03
     launch_lon = np.deg2rad(77.52),     # MAV­-LL-­03
     launch_h = -2.5e3,                  # MAV­-LL-­04
@@ -112,6 +112,8 @@ else:
     states = np.concatenate((stage_res[0][1], stage_res[1][1]))
     dep_vars = np.concatenate((stage_res[0][2], stage_res[1][2]))
 
+np.savez(sys.path[0]+"/data/MAV_ascent_test.npz", times=times, states=states, dep_vars=dep_vars)
+
 times = (times - times[0])/60
 
 flight_path_angles = np.rad2deg(dep_vars[:,0])
@@ -137,6 +139,7 @@ except IndexError:
 
 dts = np.diff(times*60)
 print("Minimum timestep was of %.3e s, maximum of %.3e s." % (np.ma.masked_array(dts, mask=dts==0).min(), max(dts)))
+
 # plt.plot(times[:idx_crop], dts[:idx_crop])
 # plt.grid()
 # plt.xlabel("Time [min]"), plt.ylabel("Time step [s]")
