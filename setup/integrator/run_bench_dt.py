@@ -23,7 +23,7 @@ from tudatpy.kernel.numerical_simulation import propagation_setup
 from tudatpy.kernel.math import interpolators
 
 # Custom imports
-from setup import ascent_framework_segmented
+from setup import ascent_framework_benchmarks
 from thrust.models.multi_fin import multi_fin_SRM
 from thrust.models.spherical import spherical_SRM
 from thrust.solid_thrust import SRM_thrust
@@ -53,7 +53,7 @@ def run_all(dt, stage, powered=True, only_burn=False):
     mass_1 = 65 + mass_2 + SRM_thrust_model_1.M_innert + SRM_thrust_model_1.M_p
 
     # Define default ascent model
-    MAV_ascent = ascent_framework_segmented.MAV_ascent(
+    MAV_ascent = ascent_framework_benchmarks.MAV_ascent(
         launch_epoch = t0,    # MAV-­LL­-01
         launch_lat = np.deg2rad(18.85),     # MAV­-LL-­03
         launch_lon = np.deg2rad(77.52),     # MAV­-LL-­03
@@ -94,7 +94,7 @@ def run_all(dt, stage, powered=True, only_burn=False):
         if powered:
             thrust_filename = glob.glob(sys.path[0]+"/data/best_integrator_dt/thrust_%i_dt_*.npz"%stage)[0]
         MAV_ascent.create_accelerations(thrust_filename=thrust_filename)
-        guidance_object = ascent_framework_segmented.FakeAeroGuidance()
+        guidance_object = ascent_framework_benchmarks.FakeAeroGuidance()
         environment_setup.set_aerodynamic_guidance(guidance_object, MAV_ascent.current_body, silence_warnings=True)
         last_state_fname = None
         if not (powered and stage == 1):
