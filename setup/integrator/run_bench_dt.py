@@ -106,7 +106,7 @@ def run_all(dt, stage, powered=True, only_burn=False):
         MAV_ascent.create_initial_state(last_state_fname)
         MAV_ascent.create_dependent_variables_to_save(default=False)
         MAV_ascent.dependent_variables_to_save.append(propagation_setup.dependent_variable.altitude(MAV_ascent.current_name, "Mars"))
-        MAV_ascent.create_termination_settings(end_time=25*60)
+        MAV_ascent.create_termination_settings(end_time=160*60)
         MAV_ascent.create_propagator_settings()
         MAV_ascent.create_integrator_settings(fixed_step=dt)
         states, dep_vars, f_evals = MAV_ascent.run_simulation(return_raw=True, return_count=True)
