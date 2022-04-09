@@ -44,6 +44,7 @@ vel_factors = [10, 10, 100, 1000]
 # If we are at lift-off, use the pre-defined initial state
 if stage == 1 and powered:
     initial_state = None
+    vel_factor = vel_factors[0]
 # Load results from previous ascent part to get final state
 else:
     if powered:
