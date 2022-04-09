@@ -251,13 +251,17 @@ class MAV_ascent:
         elif self.current_stage == 2:
             self.combined_termination_settings = propagation_setup.propagator.time_termination(self.launch_epoch + end_time)
 
-    def create_propagator_settings(self):
+    def create_propagator_settings(self, initial_state_deviation=None):
+        if initial_state_deviation is None:
+            init_state = self.initial_state
+        else:
+            init_state = self.initial_state + initial_state_deviation
         # Create translational propagator settings, using the defined bodies/models
         translational_propagator_settings = propagation_setup.propagator.translational(
             self.central_bodies,
             self.acceleration_models,
             self.bodies_to_propagate,
-            self.initial_state,
+            init_state,
             self.combined_termination_settings,
             propagation_setup.propagator.cowell,
             output_variables=self.dependent_variables_to_save
