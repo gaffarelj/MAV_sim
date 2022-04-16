@@ -67,7 +67,7 @@ for i, dt in enumerate(list_dts):
             except ValueError:
                 print("Stopping, not enough data points in current propagation...")
                 break
-            if times is None:
+            if times is None or dt > 0.78:
                 print("Stopping, not enough data points in current propagation...")
                 break
             states_dict = {times[i]: states[i] for i in range(len(times))}
@@ -93,20 +93,21 @@ for i, dt in enumerate(list_dts):
             diff_vel = np.fabs(np.linalg.norm(states_diff_array[:,4:7], axis=1))
             if powered:
                 diff_mass = np.fabs(states_diff_array[:,7])
-            # position_errors.append(diff_pos[-1]), velocity_errors.append(diff_vel[-1])
-            position_errors.append(max(diff_pos)), velocity_errors.append(max(diff_vel))
+            position_errors.append(diff_pos[-1]), velocity_errors.append(diff_vel[-1])
+            # position_errors.append(max(diff_pos)), velocity_errors.append(max(diff_vel))
         if powered:
-            mass_errors.append(max(diff_mass))
+            mass_errors.append(diff_mass[-1])
+            # mass_errors.append(max(diff_mass))
         saved_dt.append(dt)
         if only_thrust:
-            print("With a time step of %.4e [s], stage %i, max errors: thrust magnitude of %.4e [N] / mass of %.4e [kg]" \
+            print("With a time step of %.4e [s], stage %i, final errors: thrust magnitude of %.4e [N] / mass of %.4e [kg]" \
                 % (dt, current_stage, magnitude_errors[-1], mass_errors[-1]))
         elif powered:
-            print("With a time step of %.4e [s], stage %i, %s, max errors: position of %.4e [m] / velocity of %.4e [m/s] / mass of %.4e [kg]" \
-                % (dt, current_stage, "powered" if powered else "unpowered", position_errors[-1], velocity_errors[-1], mass_errors[-1]))
+            print("With a time step of %.4e [s], stage %i, %s, final errors: position of %.4e [m] / velocity of %.4e [m/s] / mass of %.4e [kg] with %.4e f evals" \
+                % (dt, current_stage, "powered" if powered else "unpowered", position_errors[-1], velocity_errors[-1], mass_errors[-1], f_evals))
         else:
-            print("With a time step of %.4e [s], stage %i, %s, max errors: position of %.4e [m] / velocity of %.4e [m/s]" \
-                % (dt, current_stage, "powered" if powered else "unpowered", position_errors[-1], velocity_errors[-1]))
+            print("With a time step of %.4e [s], stage %i, %s, final errors: position of %.4e [m] / velocity of %.4e [m/s] with %.4e f evals" \
+                % (dt, current_stage, "powered" if powered else "unpowered", position_errors[-1], velocity_errors[-1], f_evals))
         
         fig, ax = plt.subplots(figsize=(10, 6))
         if only_thrust:
@@ -119,7 +120,7 @@ for i, dt in enumerate(list_dts):
             if powered:
                 ax.plot(diff_times/60, diff_mass, label="Mass [kg]")
             ax.set_xlabel("Time [min]")
-        ax.set_ylabel("Error")
+        ax.set_ylabel("Final error")
         ax.set_yscale("log")
         plt.suptitle("State error for $\Delta$t = %.3e [s] (w.r.t. $\Delta$t = %.3e [s])" % (dt, baseline_dt))
         plt.grid(), plt.legend(), plt.tight_layout()
