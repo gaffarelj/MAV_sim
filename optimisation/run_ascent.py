@@ -139,7 +139,7 @@ if __name__ == "__main__":
     problem = pg.problem(ascent_problem)
 
     # Initialise a Pygmo population
-    pop = pg.population(problem, size=pop_size-1, seed=seed ) #, b=pygmo.default_bfe())
+    pop = pg.population(problem, size=pop_size-1, seed=seed, b=pg.default_bfe())
     # Add a good initial guess to the population
     pop.push_back(
         x=[np.deg2rad(57.5), np.deg2rad(90), 0, 0.05, 0.1, 0, 0.05, 0, -0.05, 0.0, 0.05, 0.05, 0.6875, 0.0915/0.165, 1.05, 0.24, 0.175/0.24, 0.05/0.175, 0.02/(2*np.pi*(0.175-0.05)/20), 20],
@@ -147,7 +147,7 @@ if __name__ == "__main__":
     
     # Select the optimisation algorithm
     algo = pg.nsga2(seed=seed)
-    # algo.set_bfe(pg.bfe())
+    algo.set_bfe(pg.bfe())
     algo = pg.algorithm(algo)
 
     # Run the optimisation
