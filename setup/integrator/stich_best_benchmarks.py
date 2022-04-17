@@ -44,6 +44,9 @@ for stage in [1, 2]:
         else:
             states = np.concatenate([states, np.ones((states.shape[0],1),dtype=states.dtype)*final_mass], axis=1)
 
+        # Print the initial mass of the current ascent part
+        print("Initial mass for stage %i %s [kg] =" % (stage, "powered" if powered else "unpowered"), states[0,-1])
+
         # Save the times and states
         times_stiched.append(times)
         dep_vars_stiched.append(altitudes)
@@ -60,7 +63,7 @@ states_stiched = np.asarray(states_stiched).reshape((len(times_stiched), -1))
 np.savez(sys.path[0]+"/data/best_integrator_dt/full_benchmark.npz", times=times_stiched, states=states_stiched, dep_vars=dep_vars_stiched, f_evals=f_evals_stiched)
 
 # Plot benchmark results
-fig = plt.figure(figsize=(14, 5))
+fig = plt.figure(figsize=(9, 5))
 gs = fig.add_gridspec(1, 2)
 ax1 = fig.add_subplot(gs[0, 0])
 ax2 = fig.add_subplot(gs[0, 1])
