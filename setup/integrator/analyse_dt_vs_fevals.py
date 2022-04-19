@@ -24,11 +24,16 @@ only_thrust = False
 
 # Get list of timesteps for which simulations have been run
 filenames = os.listdir(sys.path[0]+"/setup/integrator/benchmark_sim_results")
-filenames.remove(".gitkeep")
-if only_thrust:
-    list_dts = sorted([float(name.replace("thrust_%i_dt_"%(current_stage), "").replace(".npz", "")) for name in filenames])
-else:
-    list_dts = sorted([float(name.replace("%i_%s_dt_"%(current_stage, "V" if powered else "X"), "").replace(".npz", "")) for name in filenames])
+list_dts = []
+for name in filenames:
+    try:
+        if only_thrust:
+            list_dts.append(float(name.replace("thrust_%i_dt_"%(current_stage), "").replace(".npz", "")))
+        else:
+            list_dts.append(float(name.replace("%i_%s_dt_"%(current_stage, "V" if powered else "X"), "").replace(".npz", "")))
+    except ValueError:
+        pass
+list_dts = sorted(list_dts)
 
 # Define function that returns the times, states, dependent variables, and number of function evaluations
 # corresponding to a given integrator time step
@@ -87,7 +92,7 @@ for i, dt in enumerate(list_dts):
         if only_thrust:
             diff_mass = np.fabs(states_diff_array[:,1])
             diff_mag = np.fabs(states_diff_array[:,2])
-            magnitude_errors.append(max(diff_mag))
+            magnitude_errors.append(diff_mag[-1])
         else:
             diff_pos = np.fabs(np.linalg.norm(states_diff_array[:,1:4], axis=1))
             diff_vel = np.fabs(np.linalg.norm(states_diff_array[:,4:7], axis=1))
@@ -136,7 +141,7 @@ else:
     ax.plot(saved_dt, velocity_errors, marker="o", linewidth=1.5, label="Velocity [m/s]")
     if powered:
         ax.plot(saved_dt, mass_errors, marker="o", linewidth=1.5, label="Mass [kg]")
-ax.set_xlabel("Time step [s]"), ax.set_ylabel("Maximum error")
+ax.set_xlabel("Time step [s]"), ax.set_ylabel("Final error")
 ax.set_xscale("log"), ax.set_yscale("log")
 plt.grid(), plt.legend(), plt.tight_layout()
 plt.savefig(sys.path[0] + "/plots/setup/integrator/benchmark/dt_vs_error.pdf")
