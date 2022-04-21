@@ -30,16 +30,16 @@ from thrust.solid_thrust import SRM_thrust
 
 # Main parameters
 stage = 2                       # Stage for which to analyse the sensitivity analysis
-powered = True                  # Is the stage be powered or not
-allowable_errors = [15, 0.015]   # Allowable final error in position
+powered = True                  # Is the stage powered or not
+allowable_errors = [1e-0, 1e-3]   # Allowable final error in position
 deviation_exponents = np.linspace(-1, 0.35, 9, dtype=float)    # Exponent for the deviation from the nominal value
 
 
 # Define initial mass for each ascent part
-stage_initial_masses = [387.2554241260012, 187.22431444345327, 89.48046825001722, 61.428692147331795]
+stage_initial_masses = [387.2554241260012, 187.22431447525923, 89.48046825001722, 61.428692147331795]
 
 # Define factor by which to scale initial velocity error compared to position error (based on benchmark dt/error)
-vel_factors = [10, 10, 100, 1000]
+vel_factors = [10, 285, 10, 1000]
 
 # If we are at lift-off, use the pre-defined initial state
 if stage == 1 and powered:
@@ -63,7 +63,7 @@ else:
 
 # Get dt that was used for current ascent part from the saved filename
 current_f_name = glob.glob(sys.path[0]+"/data/best_integrator_dt/%i_%s_dt_*.npz" % (stage, "V" if powered else "X"))[0]
-current_dt = float(re.match(".+dt_([0-9]\.[0-9e+-]+).+", current_f_name).groups()[0])
+current_dt = float(re.match(".+dt_([0-9]\.[0-9e+-]+).+", current_f_name).groups()[0])# * 10
 
 # Define ascent
 t0 = 0
@@ -168,6 +168,7 @@ else:
     print("Computing sensitivity to deviations...")
     for dev in deviation_exponents:
         initial_state_variation = [10**dev, 10**dev, 10**dev, 10**dev/vel_factor, 10**dev/vel_factor, 10**dev/vel_factor]
+        print(initial_state_variation)
         delta_initial_state_dict = dict()
         for epoch in state_transition_matrices:
             delta_initial_state_dict[epoch] = np.dot(state_transition_matrices[epoch], initial_state_variation)
@@ -215,4 +216,5 @@ legend_elements = [Line2D([0], [0], color='orange', label="Allowable error (%.2e
 ax2.legend(handles=legend_elements, loc='lower right')
 plt.tight_layout()
 plt.savefig(sys.path[0] + "/plots/setup/integrator/sensitivity_%i_%s.pdf" % (stage, "V" if powered else "X"))
+print("Done.")
 plt.show()
