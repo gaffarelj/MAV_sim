@@ -21,7 +21,7 @@ if __name__ == "__main__":
     from tudatpy.kernel.numerical_simulation import propagation_setup
 
     # Custom imports
-    from setup.integrator.run_specific_integrator import run_ascent
+    from setup.integrator.integrator_tuning.run_specific_integrator import run_ascent
     
     # Connect to the database
     con = sqlite3.connect(sys.path[0]+"/setup/integrator/integrator_tuning/database.db")
@@ -45,7 +45,7 @@ if __name__ == "__main__":
         propagation_setup.integrator.ralston_4,
         propagation_setup.integrator.three_eight_rule_rk_4
     ]
-    dts = sorted(np.logspace(-1, -3, num=10), reverse=True)
+    dts = sorted(np.logspace(-1, -2, num=10), reverse=True)
     inputs = []
     for coefficients in fixed_coefficients:
         for dt in dts:
@@ -57,5 +57,5 @@ if __name__ == "__main__":
     # dt=1.3
     # run_ascent(method="fixed", coefficients=coefficients, dt=dt)
     
-    with MP.get_context("spawn").Pool(8) as pool:
+    with MP.get_context("spawn").Pool(24) as pool:
         outputs = pool.starmap(run_ascent, inputs)
