@@ -302,30 +302,27 @@ class MAV_ascent:
             self.propagator_settings = translational_propagator_settings
 
     def create_integrator_settings(self, fixed_step=None):
-        # If specified, setup a fixed step integrator by setting the tolerance to infinity
+        coefficients = propagation_setup.integrator.rk_1412
         if fixed_step is not None:
-            initial_time_step = fixed_step
-            minimum_time_step = fixed_step
-            maximum_time_step = fixed_step
-            tolerance = np.inf
+            self.integrator_settings = propagation_setup.integrator.runge_kutta_fixed_step_size(
+                self.initial_epoch, fixed_step, coefficients
+            )
         # Otherwise, define the variable step integrator with a tolerance of 1e-18
         else:
             initial_time_step = 1e-3
             minimum_time_step = 1e-8
             maximum_time_step = 60
             tolerance = 1e-18
-        # Use RKF7(8) coefficients
-        coefficients = propagation_setup.integrator.rkf_78
-        self.integrator_settings = propagation_setup.integrator.runge_kutta_variable_step_size(
-            self.initial_epoch,
-            initial_time_step,
-            coefficients,
-            minimum_time_step,
-            maximum_time_step,
-            relative_error_tolerance=tolerance,
-            absolute_error_tolerance=tolerance,
-            maximum_factor_increase=2,
-            minimum_factor_increase=0.05)
+            self.integrator_settings = propagation_setup.integrator.runge_kutta_variable_step_size(
+                self.initial_epoch,
+                initial_time_step,
+                coefficients,
+                minimum_time_step,
+                maximum_time_step,
+                relative_error_tolerance=tolerance,
+                absolute_error_tolerance=tolerance,
+                maximum_factor_increase=2,
+                minimum_factor_increase=0.05)
 
     def run_simulation(self, return_raw=False, return_count=False):
         # Run the ascent simulation (do not print the state or dependent variable content)
