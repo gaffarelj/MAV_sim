@@ -12,7 +12,7 @@ if __name__ == "__main__":
     import multiprocessing as MP
 
     # Custom imports
-    from setup.integrator.run_bench_dt import run_all
+    from setup.integrator.benchmark.run_bench_dt import run_all
 
     # Define maximum time step to use
     dt = 9.95e3 # (do no use an int to avoid artifacts with perfect numerical values)
@@ -23,11 +23,16 @@ if __name__ == "__main__":
 
     # Get list of timesteps for which simulations have been run
     filenames = os.listdir(sys.path[0]+"/setup/integrator/benchmark_sim_results")
-    filenames.remove(".gitkeep")
-    if only_thrust:
-        list_dts = sorted([name.replace("thrust_%i_dt_"%(current_stage), "").replace(".npz", "") for name in filenames])
-    else:
-        list_dts = sorted([name.replace("%i_%s_dt_"%(current_stage, "V" if powered else "X"), "").replace(".npz", "") for name in filenames])
+    list_dts = []
+    for name in filenames:
+        try:
+            if only_thrust:
+                list_dts.append(float(name.replace("thrust_%i_dt_"%(current_stage), "").replace(".npz", "")))
+            else:
+                list_dts.append(float(name.replace("%i_%s_dt_"%(current_stage, "V" if powered else "X"), "").replace(".npz", "")))
+        except ValueError:
+            pass
+    list_dts = sorted(list_dts)
         
     inputs = []
     while dt > min_dt:
