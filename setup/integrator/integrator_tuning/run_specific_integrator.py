@@ -30,12 +30,13 @@ def run_ascent(method, coefficients, *args):
     # Define fixed and variable step integrator
     def fixed_step_integrator_settings(init_time, coefficients, dt):
         return propagation_setup.integrator.runge_kutta_fixed_step_size(
-                init_time, dt, coefficients
+                                             # Save the propagated state 5000 * 8 * 2 times, not at every step
+                init_time, dt, coefficients, save_frequency=max(int((5000*8*2)/(160*60*dt)), 1)
         )
 
     def variable_step_integrator_settings(init_time, coefficients, tolerance):
         initial_time_step = 1e-4
-        minimum_time_step = 1e-8
+        minimum_time_step = 1e-5
         maximum_time_step = 60
         return propagation_setup.integrator.runge_kutta_variable_step_size(
             init_time,
@@ -45,8 +46,8 @@ def run_ascent(method, coefficients, *args):
             maximum_time_step,
             relative_error_tolerance=tolerance,
             absolute_error_tolerance=tolerance,
-            maximum_factor_increase=2,
-            minimum_factor_increase=0.05)
+            maximum_factor_increase=5,
+            minimum_factor_increase=0.01)
 
     SRM_stage_1 = multi_fin_SRM(R_o=0.24, R_i=0.175, N_f=20, w_f=0.02, L_f=0.05, L=1.05)
     SRM_thrust_model_1 = SRM_thrust(SRM_stage_1, A_t=0.065, epsilon=45)
@@ -110,37 +111,41 @@ def run_ascent(method, coefficients, *args):
         if stage == 1:
             t_sep = times[-1]
 
-    # if times[-1] < 140*60:
-    #     print("Simulation ended after %.2f minutes." % (times[-1]/60))
-    #     return None
-
-    # Convert the simulation results to a dict
-    sim_dict = {epoch: state for epoch, state in zip(times, states)}
-
     # Load the benchmark results
     benchmark = np.load(sys.path[0]+"/data/best_integrator_dt/full_benchmark.npz")
     times_benchmark = benchmark["times"]
     states_benchmark = benchmark["states"]
 
-    # Convert the benchmark results to a dict
-    benchmark_dict = {epoch: state for epoch, state in zip(times_benchmark, states_benchmark)}
+    if times[-1] < 140*60:
+        final_pos_error = -1
+        final_vel_error = -1
+        print("Simulation ended after %.2f minutes." % (times[-1]/60))\
 
-    # Compute the difference between the simulation and the benchmark
-    interpolator_settings = interpolators.linear_interpolation()
-    baseline_results_interpolator = interpolators.create_one_dimensional_vector_interpolator(benchmark_dict, interpolator_settings)
-    new_results_interpolator = interpolators.create_one_dimensional_vector_interpolator(sim_dict, interpolator_settings)
-    diff_times_stage_1 = np.linspace(0, t_sep-35, 500) # stop 35 before the separation because benchmark data is truncated
-    states_diff_stage_1 = np.asarray([new_results_interpolator.interpolate(epoch) - baseline_results_interpolator.interpolate(epoch) for epoch in diff_times_stage_1])
-    diff_times_stage_2 = np.linspace(t_sep+25, times[-1]-60, 500)
-    states_diff_stage_2 = np.asarray([new_results_interpolator.interpolate(epoch) - baseline_results_interpolator.interpolate(epoch) for epoch in diff_times_stage_2])
-    diff_times = np.concatenate((diff_times_stage_1, diff_times_stage_2))
-    states_diff = np.concatenate((states_diff_stage_1, states_diff_stage_2))
+    else:
+        # Convert the simulation results to a dict
+        sim_dict = {epoch: state for epoch, state in zip(times, states)}
 
-    # Compute maximum error in position and velocity
-    pos_error = np.fabs(np.linalg.norm(states_diff[:,0:3], axis=1))
-    final_pos_error = pos_error[-1]
-    vel_error = np.fabs(np.linalg.norm(states_diff[:,3:6], axis=1))
-    final_vel_error = vel_error[-1]
+        # Convert the benchmark results to a dict
+        benchmark_dict = {epoch: state for epoch, state in zip(times_benchmark, states_benchmark)}
+
+        # Compute the difference between the simulation and the benchmark
+        interpolator_settings = interpolators.linear_interpolation()
+        baseline_results_interpolator = interpolators.create_one_dimensional_vector_interpolator(benchmark_dict, interpolator_settings)
+        new_results_interpolator = interpolators.create_one_dimensional_vector_interpolator(sim_dict, interpolator_settings)
+        diff_times_stage_1 = np.linspace(0, t_sep-35, 500) # stop 35 before the separation because benchmark data is truncated
+        states_diff_stage_1 = np.asarray([new_results_interpolator.interpolate(epoch) - baseline_results_interpolator.interpolate(epoch) for epoch in diff_times_stage_1])
+        diff_times_stage_2 = np.linspace(t_sep+25, times[-1]-60, 500)
+        states_diff_stage_2 = np.asarray([new_results_interpolator.interpolate(epoch) - baseline_results_interpolator.interpolate(epoch) for epoch in diff_times_stage_2])
+        diff_times = np.concatenate((diff_times_stage_1, diff_times_stage_2))
+        states_diff = np.concatenate((states_diff_stage_1, states_diff_stage_2))
+
+        # Compute maximum error in position and velocity
+        pos_error = np.linalg.norm(np.fabs(states_diff[:,0:3]), axis=1)
+        final_pos_error = pos_error[-1]
+        vel_error = np.linalg.norm(np.fabs(states_diff[:,3:6]), axis=1)
+        final_vel_error = vel_error[-1]
+
+
     print("For %s %s %s, final error at %.2f min in position of %.2e [m] / in velocity of %.2e [m/s], with %.2e f evals (vs %.2e)" % \
         (method, str(coefficients).split(".")[-1], args, times[-1]/60, final_pos_error, final_vel_error, f_evals, benchmark["f_evals"]))
 
@@ -148,11 +153,12 @@ def run_ascent(method, coefficients, *args):
     con = sqlite3.connect(sys.path[0]+"/setup/integrator/integrator_tuning/database.db")
     cur = con.cursor()
 
-    res = cur.execute("SELECT * FROM integrator WHERE method=? AND coefficients=? AND dt=?", ("fixed", str(coefficients).split(".")[-1], dt))
+    db_col = "dt" if method == "fixed" else "tolerance"
+    res = cur.execute("SELECT * FROM integrator WHERE method=? AND coefficients=? AND %s=?" % db_col, (method, str(coefficients).split(".")[-1], args[0]))
     if res.fetchone() is None:
-        cur.execute("INSERT INTO integrator (method, coefficients, end_time, f_evals, error_pos, error_vel, dt) VALUES (?, ?, ?, ?, ?, ?, ?)", ("fixed", str(coefficients).split(".")[-1], times[-1], f_evals, final_pos_error, final_vel_error, dt))
+        cur.execute("INSERT INTO integrator (method, coefficients, end_time, f_evals, error_pos, error_vel, %s) VALUES (?, ?, ?, ?, ?, ?, ?)" % db_col, (method, str(coefficients).split(".")[-1], times[-1], f_evals, final_pos_error, final_vel_error, args[0]))
     else:
-        cur.execute("UPDATE integrator SET end_time=?, f_evals=?, error_pos=?, error_vel=? WHERE method=? AND coefficients=? AND dt=?", (times[-1], f_evals, final_pos_error, final_vel_error, "fixed", str(coefficients).split(".")[-1], dt))
+        cur.execute("UPDATE integrator SET end_time=?, f_evals=?, error_pos=?, error_vel=? WHERE method=? AND coefficients=? AND %s=?" % db_col, (times[-1], f_evals, final_pos_error, final_vel_error, method, str(coefficients).split(".")[-1], args[0]))
     
     con.commit()
     con.close()
