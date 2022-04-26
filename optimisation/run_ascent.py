@@ -150,6 +150,11 @@ if __name__ == "__main__":
     algo.set_bfe(pg.bfe())
     algo = pg.algorithm(algo)
 
+    print("Initial population:")
+    print(pop)
+
+    input("Press enter to start evolving the population...")
+
     # Run the optimisation
     for i in range(n_generations):
         print("Running generation %2d / %2d" % (i+1, n_generations))
