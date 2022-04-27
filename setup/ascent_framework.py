@@ -126,14 +126,15 @@ class MAV_ascent:
         # Set the rocket stage as the body to propagate
         self.bodies_to_propagate = [self.current_name]
 
-    def create_accelerations(self, only_thrust_dict=False):
+    def create_accelerations(self, only_thrust_dict=False, thrust_fname=None):
         # Setup the MAV thrust class from the thrust models input to this ascent class
         self.thrust = MAV_thrust(
             self,
             self.launch_angles[self.current_stage-1],
             self.thrust_models[self.current_stage-1],
             self.body_fixed_thrust_direction_y[self.current_stage-1],
-            self.body_fixed_thrust_direction_z[self.current_stage-1])
+            self.body_fixed_thrust_direction_z[self.current_stage-1],
+            thrust_filename=thrust_fname)
 
         # Define the thrust acceleration direction and magnitude from the thrust class
         thrust_direction_settings = propagation_setup.thrust.custom_thrust_direction(self.thrust.get_thrust_orientation)

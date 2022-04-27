@@ -11,6 +11,7 @@ while sys.path[0].split("/")[-1] != "MAV_sim":
 
 # Standard imports
 import numpy as np
+import glob
 import sqlite3
 
 # Tudatpy imports
@@ -46,8 +47,9 @@ def run_ascent(method, coefficients, *args):
             maximum_time_step,
             relative_error_tolerance=tolerance,
             absolute_error_tolerance=tolerance,
-            maximum_factor_increase=5,
-            minimum_factor_increase=0.01)
+            maximum_factor_increase=maximum_time_step/minimum_time_step/100,
+            minimum_factor_increase=minimum_time_step/maximum_time_step,
+            throw_exception_if_minimum_step_exceeded=False)
 
     SRM_stage_1 = multi_fin_SRM(R_o=0.24, R_i=0.175, N_f=20, w_f=0.02, L_f=0.05, L=1.05)
     SRM_thrust_model_1 = SRM_thrust(SRM_stage_1, A_t=0.065, epsilon=45)
@@ -89,7 +91,7 @@ def run_ascent(method, coefficients, *args):
     print("Running %s %s %s" % (method, str(coefficients).split(".")[-1], args))
     for stage in [1, 2]:
         MAV_ascent.create_bodies(stage=stage)
-        MAV_ascent.create_accelerations()
+        MAV_ascent.create_accelerations(thrust_fname=glob.glob(sys.path[0]+"/data/best_integrator_dt/thrust_%i_dt_*.npz"%stage)[0])
         guidance_object = ascent_framework.FakeAeroGuidance()
         environment_setup.set_aerodynamic_guidance(guidance_object, MAV_ascent.current_body, silence_warnings=True)
         MAV_ascent.create_initial_state()
