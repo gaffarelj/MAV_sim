@@ -16,7 +16,7 @@ from thrust.solid_thrust import SRM_thrust
 
 class MAV_thrust:
 
-    def __init__(self, ascent_model, angle, thrust_model, body_directions_y=0, body_directions_z=0, print_status=False, dt=0.01, thrust_filename=None):
+    def __init__(self, ascent_model, angle, thrust_model, body_directions_y=0, body_directions_z=0, print_status=False, dt=1e-4, thrust_filename=None):
         self.angle = angle
         self.thrust_model = thrust_model
 
@@ -109,16 +109,7 @@ class MAV_thrust:
                 [-np.sin(angle_z),  np.cos(angle_z),    0],
                 [0,                 0,                  1]
             ])
-            body_fixed_thrust_direction = np.dot(T_y, T_z)
-
-            # print(self.time_elapsed)
-            # print(angle_y)
-            # print(T_y)
-            # print(angle_z)
-            # print(T_z)
-            # print(np.linalg.norm(body_fixed_thrust_direction, axis=0))
-            # print(body_fixed_thrust_direction), input()
-            
+            body_fixed_thrust_direction = np.dot(T_y, T_z)        
             return body_fixed_thrust_direction
 
     def get_thrust_orientation(self, time):

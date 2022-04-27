@@ -148,7 +148,7 @@ class SRM_thrust:
         # Return the thrust
         return self.F_T
 
-    def simulate_full_burn(self, dt=0.01, compute_dep_vars=False, make_interplators=True, filename=None):
+    def simulate_full_burn(self, dt=1e-4, compute_dep_vars=False, make_interplators=True, filename=None):
         b_s, p_c_s, M_p_s = [], [], []
         if filename is None:
             time = 0
