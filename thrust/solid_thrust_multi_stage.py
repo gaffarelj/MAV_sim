@@ -63,6 +63,7 @@ class SRM_thrust_rk4:
         self.magnitude_interpolator = None
         self.m_dot_interpolator = None
         self.p_ratio = None
+        self.V_e = None
 
     def check_At(self, r_max, T_max):
         r_e = np.sqrt(self.A_e/np.pi)
@@ -75,28 +76,26 @@ class SRM_thrust_rk4:
         return self.Gamma / np.sqrt(2*self.gamma/(self.gamma-1) * (p_e/self.p_c)**(2/self.gamma) * (1 - (p_e/self.p_c)**((self.gamma-1)/self.gamma))) - self.A_e/self.A_t
 
     def compute_magnitude(self, time, y):
-        M_p, b = y
+        M_p, b, _ = y
 
         # Get the current burning surface
         try:
             self.S = self.geometry_model.burning_S(b)
         # Return 0 if the burn thickness is too high
         except ValueError:
-            return np.asarray([0, 0]), 0
+            return np.asarray([0, 0, 0])
 
         # Stop the thrust if there is no surface burning anymore
         if self.S == 0:
             self.m_dot, self.p_c, self.p_e, self.V_e, self.F_T, self.r = 0, 0, 0, 0, 0, 0
+            return np.asarray([0, 0, 0])
         else:
             # Compute propulsion characteristics at this time step
             self.m_dot = self.S * self.r * self.rho_p                               # [kg/s] mass flow
             self.p_c = (self.c_real * self.rho_p * self.a * self.S / self.A_t)**(1/(1-self.n)) # [Pa] combustion chamber pressure
-            if self.p_ratio is None:
+            if self.V_e is None:
                 self.p_e = fsolve(self.solve_p_e, self.p_c/1000)[0]                     # [Pa] exhaust pressure
-                self.p_ratio = self.p_e/self.p_c
-            else:
-                self.p_e = self.p_ratio*self.p_c
-            self.V_e = np.sqrt(2*self.gamma/(self.gamma-1) * self.R_A/self.M * self.T_c * (1-(self.p_e/self.p_c)**((self.gamma-1)/self.gamma)))   # [m/s] exhaust velocity
+                self.V_e = np.sqrt(2*self.gamma/(self.gamma-1) * self.R_A/self.M * self.T_c * (1-(self.p_e/self.p_c)**((self.gamma-1)/self.gamma)))   # [m/s] exhaust velocity
             self.F_T = self.m_dot * self.V_e + (self.p_e - self.p_a) * self.A_e     # [N] thrust
             self.F_T *= self.eta_F_T
 
@@ -104,52 +103,59 @@ class SRM_thrust_rk4:
             self.r = self.a * (self.p_c) ** self.n    # [m/s]
 
         # Return the thrust
-        return np.asarray([-self.m_dot, self.r]), self.F_T
+        return np.asarray([-self.m_dot, self.r, self.F_T])
 
-    def rk_4(self, dt=1e-3):
+    def rk_4(self, dt, y):
         t = 0 if self.last_t is None else self.last_t
-        y = [self.M_p, self.b]
-        k1, F_t_1 = self.compute_magnitude(t, y)
-        k2, F_t_2 = self.compute_magnitude(t + dt/2, y + dt/2 * k1)
-        k3, F_t_3 = self.compute_magnitude(t + dt/2, y + dt/2 * k2)
-        k4, F_t_4 = self.compute_magnitude(t + dt, y + dt * k3)
-        self.F_t = (F_t_1 + 2*F_t_2 + 2*F_t_3 + F_t_4) / 6
+        k1 = self.compute_magnitude(t, y)
+        k2 = self.compute_magnitude(t + dt/2, y + dt/2 * k1)
+        k3 = self.compute_magnitude(t + dt/2, y + dt/2 * k2)
+        k4 = self.compute_magnitude(t + dt, y + dt * k3)
         self.last_t = t + dt
         y_der = (k1 + 2*k2 + 2*k3 + k4) / 6
+        self.F_t = y_der[2]
+        y_der[-1] /= dt
         y_next = y + dt * y_der
-        self.M_p, self.b = y_next
         return y_next, y_der
 
-    def euler(self, dt=1e-3):
+    def euler(self, dt):
         t = 0 if self.last_t is None else self.last_t
         y = [self.M_p, self.b]
-        k, F_t = self.compute_magnitude(t, y)
-        self.F_t = F_t
+        k = self.compute_magnitude(t, y)
         self.last_t = t + dt
+        k[-1] /= dt
         y_next = y + dt * k
         self.M_p, self.b = y_next
         return y_next, k
 
-    def simulate_full_burn(self, dt=1e-3, use_rk4=True, *args, **kwargs):
+    def simulate_full_burn(self, dt=1e-3, use_rk4=True, use_cpp=True, *args, **kwargs):
         # x     = [M_p,   b]
         # x_dot = [m_dot, r]
         b_s, p_c_s, M_p_s = [], [], []
-        y = [self.M_p, self.b]
-        i = 0
-        # Keep computing thrust until the magnitude settles to 0
-        while self.last_t is None or np.sum(self.saved_magnitudes[-2:]) != 0:
-            if use_rk4:
-                y, der = self.rk_4(dt)
-            else:
-                y, der = self.euler(dt)
-            if i % 500 == 0:
-                self.saved_magnitudes.append(self.F_t)
+        if not use_cpp:
+            y = [self.M_p, self.b, 0]
+            # Keep computing thrust until the magnitude settles to 0
+            while self.last_t is None or np.sum(self.saved_magnitudes[-2:]) != 0:
+                if use_rk4:
+                    y, der = self.rk_4(dt, y)
+                else:
+                    y, der = self.euler(dt, y)
+                self.saved_magnitudes.append(der[2])
                 self.saved_burn_times.append(self.last_t)
                 self.saved_m_dot_s.append(der[0])
                 b_s.append(y[1])
                 M_p_s.append(y[0])
-            i += 1
-        print(i)
+        else:
+            from thrust.models.CPP.SRM_cpp import run_sim
+            self.saved_burn_times, self.saved_magnitudes, self.saved_m_dot_s = run_sim(
+                self.geometry_model.R_o,
+                self.geometry_model.R_i,
+                self.geometry_model.N_f,
+                self.geometry_model.w_f,
+                self.geometry_model.L_f,
+                self.geometry_model.L,
+                dt
+            )
 
         self.saved_burn_times.insert(0, 0), self.saved_magnitudes.insert(0, 0), self.saved_m_dot_s.insert(0, 0)
         
