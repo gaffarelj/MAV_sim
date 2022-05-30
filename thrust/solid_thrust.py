@@ -23,7 +23,7 @@ class SRM_thrust:
         epsilon=50.2,   # [-] area ratio (exhaust/throat)
         T_c=3645,       # [K] chamber temperature (https://ieeexplore-ieee-org.tudelft.idm.oclc.org/document/8742205)
         p_a=650*0.4,    # [Pa] ambient pressure (650Pa = "Sea level" on Mars)
-        a=5.8e-5,  # [m/s/MPa^n] burning rate coefficient (to use with pressure in MPa) (=0.004202/10**(6*0.31))
+        a=0.004202/10**(6*0.31),  # [m/s/MPa^n] burning rate coefficient (to use with pressure in MPa) (=0.004202/10**(6*0.31))
         n=0.31,         # [-] burning rate exponent (to use with pressure in MPa)
         rho_p=1854.5,   # [kg/m3] propellant density
         M=0.02414,      # [kg/mol] propellant molar mass FROM CEA # Air Launch versus Ground Launch: a Multidisciplinary Design Optimization Study of Expendable Launch Vehicles on Cost and Performance
@@ -39,7 +39,7 @@ class SRM_thrust:
         self.p_a = p_a
 
         # Propellant data for CTPB TP-H-3062 (CTPB14/Al16/AP70), similar to TP-H-3544 (TP-H-3544 is HTPB [does not self-degrade, not even in vacuum of space])
-        # REF: p.12 of http://31.186.81.235:8080/api/files/view/38619.pdf
+        # REF: p.12 of https://www.researchgate.net/profile/Jasmin-Terzic/publication/230776632_Prediction_of_Internal_Ballistic_Parameters_of_Solid_Propellant_Rocket_Motors/links/0912f5044a4c9ed0f4000000/Prediction-of-Internal-Ballistic-Parameters-of-Solid-Propellant-Rocket-Motors.pdf
         self.a = a              
         self.n = n              
         # Molar mass of HTPB: 0.0028 kg/mol (https://www.crayvalley.com/docs/default-source/tds/poly-bd-r-45htlo.pdf?sfvrsn=3cdb46f5_6)
@@ -50,7 +50,7 @@ class SRM_thrust:
         self.R_A = 8.314    # [J/mol/K] gas constant
         # 1749 kg/m3 for TP-H-3062 in DAMNOGLYOXIME AND DAMNOFURAZAN IN PROPELLANTS BASED ON AMMONUMPERCHLORATE
         # Mars Ascent Vehicle—Propellant Aging: TP-H-3544 has higher density than TP-H-3062
-        # Rocket propulsion elements (p.479): 1854.5 kg/m3
+        # Rocket propulsion elements (Table 12-1 p.479): 1854.5 kg/m3
         self.rho_p = rho_p
         self.gamma = gamma
 
@@ -173,13 +173,25 @@ class SRM_thrust:
             return self.saved_burn_times, self.saved_magnitudes, b_s, p_c_s, M_p_s
         else:
             thrust_results = np.load(filename)
-            self.saved_burn_times, self.saved_magnitudes, masses = thrust_results["times"], thrust_results["magnitudes"], thrust_results["masses"]
+            print("Taking thrust from", filename)
+            self.saved_burn_times, self.saved_magnitudes, masses = list(thrust_results["times"]), list(thrust_results["magnitudes"]), list(thrust_results["masses"])
+            self.saved_burn_times.insert(0, 0), self.saved_magnitudes.insert(0, 0)
             mass_diff = np.asarray(np.diff(masses))
             time_diff = np.asarray(np.diff(self.saved_burn_times))
             self.saved_m_dot_s = list(mass_diff/time_diff)
             self.saved_m_dot_s.append(self.saved_m_dot_s[-1])
+            self.saved_m_dot_s.insert(0, 0)
             
             self.magnitude_interpolator = interp1d(self.saved_burn_times, self.saved_magnitudes)
             self.m_dot_interpolator = interp1d(self.saved_burn_times, self.saved_m_dot_s)
 
             return self.saved_burn_times, self.saved_magnitudes, b_s, p_c_s, masses
+
+if __name__ == "__main__":
+    from thrust.models.multi_fin import multi_fin_SRM
+    SRM = multi_fin_SRM(R_o=0.24, R_i=0.175, N_f=20, w_f=0.02, L_f=0.05, L=1.05)
+    SRM_thrust_model = SRM_thrust(SRM, A_t=0.065, epsilon=45)
+    times, magnitudes, b_s, _, M_p_s = SRM_thrust_model.simulate_full_burn(dt=1e-3, compute_dep_vars=True)
+    print(magnitudes[-7:-2])
+    print(b_s[-7:-2])
+    print(M_p_s[-7:-2])
