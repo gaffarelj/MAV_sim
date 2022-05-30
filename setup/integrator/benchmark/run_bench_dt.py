@@ -26,7 +26,6 @@ from tudatpy.kernel.math import interpolators
 from setup import ascent_framework_benchmarks
 from thrust.models.multi_fin import multi_fin_SRM
 from thrust.models.spherical import spherical_SRM
-from thrust.solid_thrust import SRM_thrust
 
 def resample(x, n=5000, kind='linear'):
     f = interp1d(np.linspace(0, 1, x.size), x, kind)
@@ -43,7 +42,8 @@ body_fixed_thrust_direction_z = [
 ]
 interpolator_settings = interpolators.lagrange_interpolation(8, boundary_interpolation=interpolators.use_boundary_value)
 
-def run_all(dt, stage, powered=True, only_burn=False):
+def run_all(dt, stage, powered=True, only_burn=False, save_res=True, thrust_rk4=False):
+    from thrust.solid_thrust_multi_stage import SRM_thrust_rk4 as SRM_thrust
 
     SRM_stage_1 = multi_fin_SRM(R_o=0.24, R_i=0.175, N_f=20, w_f=0.02, L_f=0.05, L=1.05)
     SRM_stage_2 = spherical_SRM(R_o=0.165, R_i=0.0915)
@@ -73,18 +73,21 @@ def run_all(dt, stage, powered=True, only_burn=False):
     if only_burn:
         print("Runing stage %i burn sim with dt = %.3e" % (stage, dt))
         if stage == 1:
-            times, magnitudes, *_, masses = SRM_thrust_model_1.simulate_full_burn(dt, make_interplators=False)
+            times, magnitudes, *_, masses = SRM_thrust_model_1.simulate_full_burn(dt, make_interplators=False, use_rk4=thrust_rk4)
         elif stage == 2:
-            times, magnitudes, *_, masses = SRM_thrust_model_2.simulate_full_burn(dt, make_interplators=False)
+            times, magnitudes, *_, masses = SRM_thrust_model_2.simulate_full_burn(dt, make_interplators=False, use_rk4=thrust_rk4)
 
-        fevals = len(times)
+        f = 4 if thrust_rk4 else 1
+        fevals = len(times)*f
         times, magnitudes, masses = np.asarray(times), np.asarray(magnitudes), np.asarray(masses)
 
         times, magnitudes, masses = resample(times), resample(magnitudes), resample(masses)
 
-        np.savez("setup/integrator/benchmark_sim_results/thrust_%i_dt_%.4e" % (stage, dt), \
-            times=times, magnitudes=magnitudes, masses=masses)
+        if save_res:
+            np.savez("setup/integrator/benchmark_sim_results/thrust_%s_%i_dt_%.4e" % ("rk4" if thrust_rk4 else "euler", stage, dt), \
+                times=times, magnitudes=magnitudes, masses=masses, fevals=fevals)
         print("dt = %.3e s, stage = %i -> %.3e f evals" % (dt, stage, fevals))
+        return times, magnitudes, masses
     else:
         MAV_ascent.dt = dt
         # Setup and run simulation for stage 1 then 2
@@ -106,7 +109,7 @@ def run_all(dt, stage, powered=True, only_burn=False):
         MAV_ascent.create_initial_state(last_state_fname)
         MAV_ascent.create_dependent_variables_to_save(default=False)
         MAV_ascent.dependent_variables_to_save.append(propagation_setup.dependent_variable.altitude(MAV_ascent.current_name, "Mars"))
-        MAV_ascent.create_termination_settings(end_time=160*60)
+        MAV_ascent.create_termination_settings(end_time=160*60, print_progress=True)
         MAV_ascent.create_propagator_settings()
         MAV_ascent.create_integrator_settings(fixed_step=dt)
         states, dep_vars, f_evals = MAV_ascent.run_simulation(return_raw=True, return_count=True)
@@ -125,3 +128,5 @@ def run_all(dt, stage, powered=True, only_burn=False):
 
             np.savez("setup/integrator/benchmark_sim_results/%i_%s_dt_%.4e" % (stage, "V" if powered else "X", dt), times=times, states=states, dep_vars=dep_vars, f_evals=f_evals)
             print("dt = %.3e s, stage = %i, %s -> %.3e f evals" % (dt, stage, "powered" if powered else "unpowered", f_evals))
+            if powered:
+                print("final mass:", states[-1][-1])
