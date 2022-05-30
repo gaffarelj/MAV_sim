@@ -16,14 +16,13 @@ import sqlite3
 
 # Tudatpy imports
 from tudatpy.kernel.numerical_simulation import environment_setup, propagation_setup
-from tudatpy import util
 from tudatpy.kernel.math import interpolators
 
 # Custom imports
 from setup import ascent_framework
 from thrust.models.multi_fin import multi_fin_SRM
 from thrust.models.spherical import spherical_SRM
-from thrust.solid_thrust import SRM_thrust
+from thrust.solid_thrust_multi_stage import SRM_thrust_rk4 as SRM_thrust
 
 
 def run_ascent(method, coefficients, *args):
@@ -36,7 +35,7 @@ def run_ascent(method, coefficients, *args):
         )
 
     def variable_step_integrator_settings(init_time, coefficients, tolerance):
-        initial_time_step = 1e-4
+        initial_time_step = 5e-5
         minimum_time_step = 1e-5
         maximum_time_step = 60
         return propagation_setup.integrator.runge_kutta_variable_step_size(
@@ -47,8 +46,8 @@ def run_ascent(method, coefficients, *args):
             maximum_time_step,
             relative_error_tolerance=tolerance,
             absolute_error_tolerance=tolerance,
-            maximum_factor_increase=maximum_time_step/minimum_time_step/100,
-            minimum_factor_increase=minimum_time_step/maximum_time_step,
+            maximum_factor_increase=1.01,#maximum_time_step/minimum_time_step/100,
+            minimum_factor_increase=0.01,#minimum_time_step/maximum_time_step,
             throw_exception_if_minimum_step_exceeded=False)
 
     SRM_stage_1 = multi_fin_SRM(R_o=0.24, R_i=0.175, N_f=20, w_f=0.02, L_f=0.05, L=1.05)
@@ -87,15 +86,20 @@ def run_ascent(method, coefficients, *args):
     )
 
     # Setup and run simulation for both stages
-    times, states, f_evals, t_sep = [], [], 0, 0
+    times, states, dep_vars, f_evals, t_sep = [], [], [], 0, 0
     print("Running %s %s %s" % (method, str(coefficients).split(".")[-1], args))
     for stage in [1, 2]:
         MAV_ascent.create_bodies(stage=stage)
-        MAV_ascent.create_accelerations(thrust_fname=glob.glob(sys.path[0]+"/data/best_integrator_dt/thrust_%i_dt_*.npz"%stage)[0])
+        if method == "thrust":
+            print("Running thrust model with dt = ", args[1])
+            MAV_ascent.create_accelerations(thrust_dt=args[1])
+        else:
+            MAV_ascent.create_accelerations(thrust_fname=glob.glob(sys.path[0]+"/data/best_integrator_dt/thrust_%i_dt_*.npz"%stage)[0])
         guidance_object = ascent_framework.FakeAeroGuidance()
         environment_setup.set_aerodynamic_guidance(guidance_object, MAV_ascent.current_body, silence_warnings=True)
         MAV_ascent.create_initial_state()
         MAV_ascent.create_dependent_variables_to_save(default=False)
+        MAV_ascent.dependent_variables_to_save.append(propagation_setup.dependent_variable.altitude(MAV_ascent.current_name, "Mars"))
         MAV_ascent.create_termination_settings(end_time=160*60)
         MAV_ascent.create_propagator_settings()
         MAV_ascent.create_integrator_settings(empty_settings=True)
@@ -107,23 +111,26 @@ def run_ascent(method, coefficients, *args):
             tolerance = args[0]
             integrator_settings = variable_step_integrator_settings(MAV_ascent.initial_epoch, coefficients, tolerance)
         MAV_ascent.integrator_settings = integrator_settings
-        times_i, states_i, _dep_vars_i, f_evals_i = MAV_ascent.run_simulation(return_count=True)
+        times_i, states_i, dep_vars_i, f_evals_i, success = MAV_ascent.run_simulation(return_count=True, return_success_status=True)
         f_evals += f_evals_i
-        times.extend(times_i), states.extend(states_i)
+        times.extend(times_i), states.extend(states_i), dep_vars.extend(dep_vars_i)
         if stage == 1:
             t_sep = times[-1]
+        if not success:
+            print("Simulation %s %s %s failed" % (method, str(coefficients).split(".")[-1], args))
+            break
 
-    # Load the benchmark results
-    benchmark = np.load(sys.path[0]+"/data/best_integrator_dt/full_benchmark.npz")
-    times_benchmark = benchmark["times"]
-    states_benchmark = benchmark["states"]
-
-    if times[-1] < 140*60:
-        final_pos_error = -1
-        final_vel_error = -1
-        print("Simulation ended after %.2f minutes." % (times[-1]/60))\
+    if times[-1] < 140*60 or not success:
+        final_pos_error = 999999999
+        final_vel_error = 999999999
+        print("Simulation ended after %.2f minutes with %s status." % (times[-1]/60, success))\
 
     else:
+        # Load the benchmark results
+        benchmark = np.load(sys.path[0]+"/data/best_integrator_dt/full_benchmark.npz")
+        times_benchmark = benchmark["times"]
+        states_benchmark = benchmark["states"]
+        
         # Convert the simulation results to a dict
         sim_dict = {epoch: state for epoch, state in zip(times, states)}
 
@@ -147,43 +154,59 @@ def run_ascent(method, coefficients, *args):
         vel_error = np.linalg.norm(np.fabs(states_diff[:,3:6]), axis=1)
         final_vel_error = vel_error[-1]
 
+        # import matplotlib.pyplot as plt
+        # plt.plot(diff_times/60, pos_error)
+        # plt.yscale("log")
+        # plt.grid()
+        # plt.tight_layout()
+        # plt.show()
 
     print("For %s %s %s, final error at %.2f min in position of %.2e [m] / in velocity of %.2e [m/s], with %.2e f evals (vs %.2e)" % \
-        (method, str(coefficients).split(".")[-1], args, times[-1]/60, final_pos_error, final_vel_error, f_evals, benchmark["f_evals"]))
+        (method, str(coefficients).split(".")[-1], args, times[-1]/60, final_pos_error, final_vel_error, f_evals, 8.28e+07))
 
     # Connect to the database
     con = sqlite3.connect(sys.path[0]+"/setup/integrator/integrator_tuning/database.db")
     cur = con.cursor()
 
-    db_col = "dt" if method == "fixed" else "tolerance"
-    res = cur.execute("SELECT * FROM integrator WHERE method=? AND coefficients=? AND %s=?" % db_col, (method, str(coefficients).split(".")[-1], args[0]))
-    if res.fetchone() is None:
-        cur.execute("INSERT INTO integrator (method, coefficients, end_time, f_evals, error_pos, error_vel, %s) VALUES (?, ?, ?, ?, ?, ?, ?)" % db_col, (method, str(coefficients).split(".")[-1], times[-1], f_evals, final_pos_error, final_vel_error, args[0]))
+    if method == "thrust":
+        res = cur.execute("SELECT * FROM integrator WHERE method=? AND coefficients=? AND dt=?", (method, str(coefficients).split(".")[-1], args[1]))
+        if res.fetchone() is None:
+            cur.execute("INSERT INTO integrator (method, coefficients, end_time, f_evals, error_pos, error_vel, tolerance, dt) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", (method, str(coefficients).split(".")[-1], times[-1], f_evals, final_pos_error, final_vel_error, args[0], args[1]))
+        else:
+            cur.execute("UPDATE integrator SET end_time=?, f_evals=?, error_pos=?, error_vel=?, tolerance=? WHERE method=? AND coefficients=? AND dt=?", (times[-1], f_evals, final_pos_error, final_vel_error, args[0], method, str(coefficients).split(".")[-1], args[1]))
     else:
-        cur.execute("UPDATE integrator SET end_time=?, f_evals=?, error_pos=?, error_vel=? WHERE method=? AND coefficients=? AND %s=?" % db_col, (times[-1], f_evals, final_pos_error, final_vel_error, method, str(coefficients).split(".")[-1], args[0]))
+        db_col = "dt" if method == "fixed" else "tolerance"
+        res = cur.execute("SELECT * FROM integrator WHERE method=? AND coefficients=? AND %s=?" % db_col, (method, str(coefficients).split(".")[-1], args[0]))
+        if res.fetchone() is None:
+            cur.execute("INSERT INTO integrator (method, coefficients, end_time, f_evals, error_pos, error_vel, %s) VALUES (?, ?, ?, ?, ?, ?, ?)" % db_col, (method, str(coefficients).split(".")[-1], times[-1], f_evals, final_pos_error, final_vel_error, args[0]))
+        else:
+            cur.execute("UPDATE integrator SET end_time=?, f_evals=?, error_pos=?, error_vel=? WHERE method=? AND coefficients=? AND %s=?" % db_col, (times[-1], f_evals, final_pos_error, final_vel_error, method, str(coefficients).split(".")[-1], args[0]))
     
     con.commit()
     con.close()
 
-    if False:
-        from matplotlib import pyplot as plt
-        # Plot state error over time
-        fig, ax = plt.subplots(figsize=(10, 6))
-        ax.plot(diff_times/60, pos_error, label="Position [m]")
-        ax.plot(diff_times/60, vel_error, label="Velocity [m/s]")
-        ax.plot(diff_times/60, np.fabs(states_diff[:,6]), label="Mass [kg]")
-        ax.set_xlabel("Time [min]"), ax.set_ylabel("Absolute state error norm")
-        ax.set_yscale("log")
-        ax.grid()
-        ax.legend()
-        plt.tight_layout()
+    # return times, states, dep_vars
+    return final_pos_error, final_vel_error
 
-        # Plot time step used over time
-        dts = np.diff(times)
-        fig, ax = plt.subplots(figsize=(10, 6))
-        ax.plot(np.asarray(times[:-1])/60, dts)
-        ax.set_xlabel("Time [min]"), ax.set_ylabel("Time step [s]")
-        ax.grid()
-        ax.set_yscale("log")
-        plt.tight_layout()
-        plt.show()
+    # if False:
+    #     from matplotlib import pyplot as plt
+    #     # Plot state error over time
+    #     fig, ax = plt.subplots(figsize=(10, 6))
+    #     ax.plot(diff_times/60, pos_error, label="Position [m]")
+    #     ax.plot(diff_times/60, vel_error, label="Velocity [m/s]")
+    #     ax.plot(diff_times/60, np.fabs(states_diff[:,6]), label="Mass [kg]")
+    #     ax.set_xlabel("Time [min]"), ax.set_ylabel("Absolute state error norm")
+    #     ax.set_yscale("log")
+    #     ax.grid()
+    #     ax.legend()
+    #     plt.tight_layout()
+
+    #     # Plot time step used over time
+    #     dts = np.diff(times)
+    #     fig, ax = plt.subplots(figsize=(10, 6))
+    #     ax.plot(np.asarray(times[:-1])/60, dts)
+    #     ax.set_xlabel("Time [min]"), ax.set_ylabel("Time step [s]")
+    #     ax.grid()
+    #     ax.set_yscale("log")
+    #     plt.tight_layout()
+    #     plt.show()

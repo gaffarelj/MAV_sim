@@ -19,6 +19,7 @@ from tudatpy.kernel.numerical_simulation import propagation_setup
 
 # Parameters
 method = "variable" # "variable" or "fixed"
+allowed_errors = [5e3, 5]
 
 # Connect to the database
 con = sqlite3.connect(sys.path[0]+"/setup/integrator/integrator_tuning/database.db")
@@ -51,10 +52,12 @@ variable_coefficients = [
     propagation_setup.integrator.rkf_1412
 ]
 
-coefficients = variable_coefficients if method == "variable" else fixed_coefficients
+coefficients = variable_coefficients if method == "variable" else fixed_coefficients#+variable_coefficients
 
-fig = plt.figure(figsize=(10, 7))
+fig1 = plt.figure(figsize=(10, 6))
+fig2 = plt.figure(figsize=(10, 6))
 
+i_plotted = 0
 for integ in coefficients:
     integ_name = str(integ).split(".")[-1]
     print(integ_name)
@@ -63,7 +66,7 @@ for integ in coefficients:
     impossible_tol = []
 
     # Get all the data
-    res = cur.execute("SELECT * FROM integrator WHERE method=? AND coefficients=?", (method, integ_name))
+    res = cur.execute("SELECT * FROM integrator WHERE method=? AND coefficients=? ORDER BY f_evals ASC", (method, integ_name))
     for row in res:
         if method == "variable" and row[4] == -1:
             if len(impossible_tol) < 2:
@@ -71,10 +74,14 @@ for integ in coefficients:
             else:
                 impossible_tol[1] = row[6]
         else:
-            f_evals.append(row[3])
-            errors_pos.append(row[4])
-            errors_vel.append(row[5])
-            print("Dt:" if method == "fixed" else "Tol:", row[7] if method == "fixed" else row[6], "Fevals:", row[3], "Error pos:", row[4], "Error vel:", row[5])
+            if row[4] != 999999999 and row[5] != 999999999 and row[4] >= 50 and row[5] >= 0.05 and row[3] < 3e4:
+                f_evals.append(row[3])
+                errors_pos.append(row[4])
+                errors_vel.append(row[5])
+                i_plotted += 1
+                print("Dt:" if method == "fixed" else "Tol:", row[7] if method == "fixed" else row[6], "Fevals:", row[3], "Error pos:", row[4], "Error vel:", row[5])
+            elif row[4] == 999999999:
+                print("Impossible tol:", row[6])
     if method == "variable" and len(impossible_tol) != 0:
         print("This tolerance range was unfeasible: [%.2e, %.2e]" % (min(impossible_tol), max(impossible_tol)))
 
@@ -86,17 +93,40 @@ for integ in coefficients:
         continue
 
     # Plot the data
+    plt.figure(fig1)
     plt.plot(f_evals, errors_pos, label=integ_name, marker="o", linestyle="-")
+    plt.figure(fig2)
+    plt.plot(f_evals, errors_vel, label=integ_name, marker="o", linestyle="-")
 
+print("Total of %i points plotted" % i_plotted)
 
-# Close database connection and show plot
+# Close database connection
 con.close()
-plt.xscale("log")
-plt.yscale("log")
+
+# Finish plot
+plt.figure(fig1)
+plt.xscale("log"), plt.yscale("log")
+xlim, ylim = plt.xlim(), plt.ylim()
+plt.hlines(y=allowed_errors[0], xmin=xlim[0]/1e6, xmax=xlim[1]*1e6, color="orange", linestyle="--")
+plt.xlim(xlim[0], xlim[1])
 plt.xlabel("Number of function evaluations [-]")
 plt.ylabel("Final error in position [m]")
 plt.grid()
 plt.title("Final error in position for different %s step integrators" % method)
 plt.legend()
 plt.tight_layout()
-plt.show()
+plt.savefig(sys.path[0]+"/plots/setup/integrator/compare_integrators_%s_pos.pdf" % method)
+
+plt.figure(fig2)
+plt.xscale("log"), plt.yscale("log")
+xlim, ylim = plt.xlim(), plt.ylim()
+plt.hlines(y=allowed_errors[1], xmin=xlim[0]/1e6, xmax=xlim[1]*1e6, color="orange", linestyle="--")
+plt.xlim(xlim[0], xlim[1])
+plt.xlabel("Number of function evaluations [-]")
+plt.ylabel("Final error in velocity [m/a]")
+plt.grid()
+plt.title("Final error in velocity for different %s step integrators" % method)
+plt.legend()
+plt.tight_layout()
+plt.savefig(sys.path[0]+"/plots/setup/integrator/compare_integrators_%s_vel.pdf" % method)
+plt.close()

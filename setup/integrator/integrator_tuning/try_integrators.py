@@ -25,8 +25,9 @@ if __name__ == "__main__":
 
     # Parameters
     method = "variable" # "variable" or "fixed"
-    dts = sorted(np.logspace(-2, -4, num=10), reverse=True)
-    tolerances = sorted(np.logspace(-20, -10, num=10), reverse=True)
+    dts = sorted(np.logspace(-3, -0.5, num=10), reverse=True)
+    tolerances = sorted(np.logspace(-18, -2, num=20), reverse=True)
+    allowed_errors = [5e3, 5]
     reset_table = False
 
     if method not in ["variable", "fixed"]:
@@ -41,6 +42,11 @@ if __name__ == "__main__":
         cur.execute("DROP TABLE IF EXISTS integrator")
         cur.execute("CREATE TABLE integrator (method TEXT, coefficients TEXT, end_time REAL, f_evals REAL, error_pos REAL, error_vel REAL, tolerance REAL, dt REAL)")
         con.commit()
+
+    # # Delete all row where error_pos is -1
+    # cur.execute("DELETE FROM integrator WHERE error_pos = -1")
+    # cur.execute("DELETE FROM integrator WHERE method = 'variable'")
+    # con.commit()
 
     # Define fixed integrators to try
     fixed_coefficients = [
@@ -71,20 +77,31 @@ if __name__ == "__main__":
         propagation_setup.integrator.rkf_1412
     ]
 
-    inputs = []
-    iterate_coefficients = fixed_coefficients if method == "fixed" else variable_coefficients
+    iterate_coefficients = variable_coefficients if method == "variable" else fixed_coefficients#+variable_coefficients
     iterate_input = dts if method == "fixed" else tolerances
     db_col = "dt" if method == "fixed" else "tolerance"
-    for coefficients in iterate_coefficients:
-        for inp in iterate_input:
-            # Check in the database that this combination was not already run
-            res = cur.execute("SELECT * FROM integrator WHERE method=? AND coefficients=? AND %s=?" % db_col, (method, str(coefficients).split(".")[-1], inp))
-            if res.fetchone() is None:
-                inputs.append((method, coefficients, inp))
-    con.close()
 
+    inputs = []
+    N_workers = 24
+
+    #while True:
+    for i_inp, inp in enumerate(iterate_input):
+        if inp >= 1e-10:
+            for i_coeff, coefficients in enumerate(iterate_coefficients):
+                res1 = cur.execute("SELECT error_pos, error_vel FROM integrator WHERE method=? AND coefficients=? AND error_pos<? AND error_vel<? AND %s>=?" % db_col, (method, str(coefficients).split(".")[-1], allowed_errors[0]/10, allowed_errors[1]/10, inp)).fetchall()
+                res2 = cur.execute("SELECT error_pos, error_vel FROM integrator WHERE method=? AND coefficients=? AND f_evals>=5e4", (method, str(coefficients).split(".")[-1])).fetchall()
+                if len(res1) != 0 or len(res2) != 0:
+                    pass
+                else:
+                    # Check in the database that this combination was not already run
+                    res = cur.execute("SELECT * FROM integrator WHERE method=? AND coefficients=? AND %s=?" % db_col, (method, str(coefficients).split(".")[-1], inp))
+                    if res.fetchone() is None:
+                        inputs.append((method, coefficients, inp))
+    
+    con.close()
     print(inputs)
     input("Press enter to run these inputs...")
+    print("Running {} inputs...".format(len(inputs)))
     
-    with MP.get_context("spawn").Pool(6) as pool:
+    with MP.get_context("spawn").Pool(N_workers) as pool:
         outputs = pool.starmap(run_ascent, inputs)
