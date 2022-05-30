@@ -1,6 +1,9 @@
-import sys
+import sys, os
 # Add tudatpy path
-sys.path.append("/mnt/c/TUDAT/tudat-bundle/build/tudatpy")
+if "cala" in os.getcwd():
+    sys.path.append("/cala/jeremie/tudat-bundle/build/tudatpy")
+else:
+    sys.path.append("/mnt/c/TUDAT/tudat-bundle/build/tudatpy")
 # Set path to uppermost project level
 sys.path = [p for p in sys.path if p != ""]
 while sys.path[0].split("/")[-1] != "MAV_sim":
@@ -112,7 +115,7 @@ else:
     states = np.concatenate((stage_res[0][1], stage_res[1][1]))
     dep_vars = np.concatenate((stage_res[0][2], stage_res[1][2]))
 
-np.savez(sys.path[0]+"/data/MAV_ascent_test.npz", times=times, states=states, dep_vars=dep_vars)
+# np.savez(sys.path[0]+"/data/MAV_ascent_test.npz", times=times, states=states, dep_vars=dep_vars)
 
 times = (times - times[0])/60
 
@@ -131,6 +134,8 @@ a_aero = dep_vars[:,15]
 dyna_pressures = dep_vars[:,16]
 velocities = dep_vars[:,17:20]
 full_a_thrust = dep_vars[:,20:23]
+
+print("Mach number ranges from %.2f to %.2f" % (min(mach_numbers), max(mach_numbers)))
 
 try:
     idx_crop = np.where(times >= t_sep/60+3)[0][0]
@@ -158,6 +163,38 @@ print("Minimum timestep was of %.3e s, maximum of %.3e s." % (np.ma.masked_array
 # ax.set_xlabel("x"), ax.set_ylabel("y"), ax.set_zlabel("z")
 # plt.show()
 
+import matplotlib
+matplotlib.rcParams.update({'font.size': 16})
+
+plt.figure(figsize=(7, 6.5))
+plt.plot(times, altitudes/1e3)
+plt.grid()
+plt.xlabel("Time since launch [min]")
+plt.ylabel("Altitude [km]")
+plt.tight_layout()
+
+
+plt.figure(figsize=(7, 6.5))
+plt.plot(times[:idx_crop], mass[:idx_crop])
+plt.grid()
+plt.xlabel("Time since launch [min]")
+plt.ylabel("Rocket mass [kg]")
+plt.tight_layout()
+
+plt.figure(figsize=(7, 6.5))
+plt.plot(times[:idx_crop], tot_accs[:idx_crop], label="Total", linestyle="dotted", color="black")
+plt.plot(times[:idx_crop], a_SH[:idx_crop], label="SH D/O 4")
+plt.plot(times[:idx_crop], a_thrust[:idx_crop], label="Thrust")
+plt.plot(times[:idx_crop], a_aero[:idx_crop], label="Aerodynamic")
+plt.grid()
+plt.xlabel("Time since launch [min]")
+plt.ylabel("Acceleration [m/s$^2$]")
+#ax5.set_yscale("log") # (uncomment this to see the distinction between the accelerations more clearly)
+plt.legend()
+plt.tight_layout()
+
+plt.show()
+
 # Create a figure with 5 subplots: a grid of 2x2, then one horizontal one at the bottom
 fig = plt.figure(figsize=(14, 15))
 gs = fig.add_gridspec(3, 2)
@@ -174,7 +211,7 @@ ax1.set_xlabel("Time since launch [min]")
 ax1.set_ylabel("Altitude [km]")
 
 # Plot the airspeed history
-ax2.plot(times, airspeeds)
+ax2.plot(times, mach_numbers)
 ax2.grid()
 ax2.set_xlabel("Time since launch [min]")
 ax2.set_ylabel("Airspeed [m/s]")
