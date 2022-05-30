@@ -362,3 +362,5 @@ setup/integrator/*/*/*.npz
 plots/setup/integrator/*/*error*.pdf
 plots/setup/integrator/benchmark/*/*.pdf
 .vscode/settings.json
+setup/integrator/integrator_tuning/database *.db
+thrust/models/CPP/SRM_cpp.so
