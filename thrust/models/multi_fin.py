@@ -23,6 +23,8 @@ class multi_fin_SRM:
         self.L_f = L_f
         self.L = L
 
+        self.P_fin = 2 * self.N_f * self.L_f
+
     def check_b(self, b):
         if self.run_checks:
             # Check the validity of the given burnt thickness
@@ -42,9 +44,7 @@ class multi_fin_SRM:
         # Compute the burning perimeter of the tubular part
         P_tube = 2*np.pi * (self.R_i + b)
         # Compute the burning perimeter of the fins
-        P_fin = 0
-        if b < self.w_f/2:
-            P_fin = 2 * self.N_f * (self.L_f - b)
+        P_fin = self.P_fin if b < self.w_f/2 else 0
         # Compute the burning surface
         return (P_tube + P_fin) * self.L
 
