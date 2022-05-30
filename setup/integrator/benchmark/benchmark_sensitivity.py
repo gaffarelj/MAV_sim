@@ -29,17 +29,25 @@ from thrust.solid_thrust import SRM_thrust
 
 
 # Main parameters
-stage = 2                       # Stage for which to analyse the sensitivity analysis
-powered = True                  # Is the stage powered or not
-allowable_errors = [1e-0, 1e-3]   # Allowable final error in position
-deviation_exponents = np.linspace(-1, 0.35, 9, dtype=float)    # Exponent for the deviation from the nominal value
+stage = 1                      # Stage for which to analyse the sensitivity analysis
+powered = True                 # Is the stage powered or not
+allowable_errors = [5.6e-2, 1.9E-4]  # Allowable final error in position
+deviation_exponents = np.linspace(-4, -2, 9, dtype=float)    # Exponent for the deviation from the nominal value
 
+thrust_scaling = True
+thrust_devs = list(np.logspace(-4, 0, 9, dtype=float))
+thrust_devs.insert(0, 0)
+
+# allowable errors:
+# * end of stage 2 powered: [3.2e-2, 3.2e-5]
+# * end of stage 1 powered: [1.8e-5, 6.2e-8]
 
 # Define initial mass for each ascent part
 stage_initial_masses = [387.2554241260012, 187.22431447525923, 89.48046825001722, 61.428692147331795]
 
 # Define factor by which to scale initial velocity error compared to position error (based on benchmark dt/error)
 vel_factors = [10, 285, 10, 1000]
+mass_factors = [90, 930]
 
 # If we are at lift-off, use the pre-defined initial state
 if stage == 1 and powered:
@@ -63,7 +71,7 @@ else:
 
 # Get dt that was used for current ascent part from the saved filename
 current_f_name = glob.glob(sys.path[0]+"/data/best_integrator_dt/%i_%s_dt_*.npz" % (stage, "V" if powered else "X"))[0]
-current_dt = float(re.match(".+dt_([0-9]\.[0-9e+-]+).+", current_f_name).groups()[0])# * 10
+current_dt = float(re.match(".+dt_([0-9]\.[0-9e+-]+).+", current_f_name).groups()[0]) * 1000
 
 # Define ascent
 t0 = 0
@@ -102,13 +110,14 @@ MAV_ascent = ascent_framework_benchmarks.MAV_ascent(
 MAV_ascent.dt = current_dt
 MAV_ascent.create_bodies(stage=stage)
 thrust_filename = glob.glob(sys.path[0]+"/data/best_integrator_dt/thrust_%i_dt_*.npz"%stage)[0] if powered else None
-MAV_ascent.create_accelerations(thrust_filename=thrust_filename)
-guidance_object = ascent_framework_benchmarks.FakeAeroGuidance()
-environment_setup.set_aerodynamic_guidance(guidance_object, MAV_ascent.current_body, silence_warnings=True)
 MAV_ascent.create_initial_state(state=initial_state)
+if not thrust_scaling:
+    MAV_ascent.create_accelerations(thrust_filename=thrust_filename)
+    guidance_object = ascent_framework_benchmarks.FakeAeroGuidance()
+    environment_setup.set_aerodynamic_guidance(guidance_object, MAV_ascent.current_body, silence_warnings=True)
+    MAV_ascent.create_termination_settings(end_time=160*60)
 MAV_ascent.create_dependent_variables_to_save(default=False)
 MAV_ascent.dependent_variables_to_save.append(propagation_setup.dependent_variable.altitude(MAV_ascent.current_name, "Mars"))
-MAV_ascent.create_termination_settings(end_time=160*60)
 MAV_ascent.create_integrator_settings(fixed_step=current_dt)
 
 fig = plt.figure(figsize=(10, 7))
@@ -117,33 +126,65 @@ ax1 = fig.add_subplot(gs[0, 0])
 ax2 = fig.add_subplot(gs[1, 0])
 print("Propagating dynamics with dt = %.2e..." % current_dt)
 if powered:
-    deviation_exponents = np.insert(deviation_exponents, 0, -np.inf)
-    baseline_states = None
-    for i, dev in enumerate(deviation_exponents):
-        initial_state_variation = [10**dev, 10**dev, 10**dev, 10**dev/vel_factor, 10**dev/vel_factor, 10**dev/vel_factor]
-        print("Running with initial state deviation =", initial_state_variation)
-        MAV_ascent.create_propagator_settings(initial_state_variation)
-        states, dep_vars, f_evals = MAV_ascent.run_simulation(return_raw=True, return_count=True)
-        # Save the baseline states
-        if i == 0:
-            baseline_states = util.result2array(states)
-        else:
-            states_array = util.result2array(states)
-            states_diff = states_array - baseline_states
-            # Plot the deviation in position
-            ax1.plot(
-                states_array[:,0]/60,
-                np.linalg.norm(states_diff[:,1:4], axis=1),
-                linestyle="dashed",
-                label="%.2e m / %.2e m/s" % (10**dev, 10**dev/vel_factor)
-            )
-            # Plot the deviation in velocity
-            ax2.plot(
-                states_array[:,0]/60,
-                np.linalg.norm(states_diff[:,4:], axis=1),
-                linestyle="dashed",
-                label="%.2e m / %.2e m/s" % (10**dev, 10**dev/vel_factor)
-            )
+    if thrust_scaling:
+        for i, thrust_dev in enumerate(thrust_devs):
+            print("Applying thrust deviation of %.2e N..." % (thrust_dev))
+            mag_dev = thrust_dev
+            mass_dev = thrust_dev/mass_factors[stage-1]
+            with util.redirect_std():
+                MAV_ascent.create_accelerations(thrust_filename=thrust_filename, thrust_devs=[mag_dev, mass_dev])
+                guidance_object = ascent_framework_benchmarks.FakeAeroGuidance()
+                environment_setup.set_aerodynamic_guidance(guidance_object, MAV_ascent.current_body, silence_warnings=True)
+            MAV_ascent.create_termination_settings(end_time=160*60)
+            MAV_ascent.create_propagator_settings()
+            states, dep_vars, f_evals = MAV_ascent.run_simulation(return_raw=True, return_count=True)
+            if i == 0:
+                baseline_states = util.result2array(states)
+            else:
+                states_array = util.result2array(states)
+                states_diff = states_array - baseline_states
+                # Plot the deviation in position
+                ax1.plot(
+                    states_array[:,0]/60,
+                    np.linalg.norm(states_diff[:,1:4], axis=1),
+                    linestyle="dashed",
+                    label="%.2e N / %.2e kg" % (mag_dev, mass_dev)
+                )
+                # Plot the deviation in velocity
+                ax2.plot(
+                    states_array[:,0]/60,
+                    np.linalg.norm(states_diff[:,4:], axis=1),
+                    linestyle="dashed",
+                    label="%.2e N / %.2e kg" % (mag_dev, mass_dev)
+                )
+    else:
+        deviation_exponents = np.insert(deviation_exponents, 0, -np.inf)
+        baseline_states = None
+        for i, dev in enumerate(deviation_exponents):
+            initial_state_variation = [10**dev, 10**dev, 10**dev, 10**dev/vel_factor, 10**dev/vel_factor, 10**dev/vel_factor]
+            print("Running with initial state deviation =", initial_state_variation)
+            MAV_ascent.create_propagator_settings(initial_state_variation)
+            states, dep_vars, f_evals = MAV_ascent.run_simulation(return_raw=True, return_count=True)
+            # Save the baseline states
+            if i == 0:
+                baseline_states = util.result2array(states)
+            else:
+                states_array = util.result2array(states)
+                states_diff = states_array - baseline_states
+                # Plot the deviation in position
+                ax1.plot(
+                    states_array[:,0]/60,
+                    np.linalg.norm(states_diff[:,1:4], axis=1),
+                    linestyle="dashed",
+                    label="%.2e m / %.2e m/s" % (10**dev, 10**dev/vel_factor)
+                )
+                # Plot the deviation in velocity
+                ax2.plot(
+                    states_array[:,0]/60,
+                    np.linalg.norm(states_diff[:,4:], axis=1),
+                    linestyle="dashed",
+                    label="%.2e m / %.2e m/s" % (10**dev, 10**dev/vel_factor)
+                )
 else:
     MAV_ascent.create_propagator_settings()
     # Setup variational equations
@@ -215,6 +256,7 @@ ax2.grid()
 legend_elements = [Line2D([0], [0], color='orange', label="Allowable error (%.2e m/s)"%allowable_errors[1])]
 ax2.legend(handles=legend_elements, loc='lower right')
 plt.tight_layout()
-plt.savefig(sys.path[0] + "/plots/setup/integrator/sensitivity_%i_%s.pdf" % (stage, "V" if powered else "X"))
+scaling_name = "_scaled" if thrust_scaling else ""
+plt.savefig(sys.path[0] + "/plots/setup/integrator/sensitivity_%i_%s%s.pdf" % (stage, "V" if powered else "X", scaling_name))
 print("Done.")
 plt.show()
