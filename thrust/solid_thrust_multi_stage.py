@@ -63,7 +63,6 @@ class SRM_thrust_rk4:
         self.magnitude_interpolator = None
         self.m_dot_interpolator = None
         self.p_ratio = None
-        self.V_e = None
 
     def check_At(self, r_max, T_max):
         r_e = np.sqrt(self.A_e/np.pi)
@@ -93,9 +92,12 @@ class SRM_thrust_rk4:
             # Compute propulsion characteristics at this time step
             self.m_dot = self.S * self.r * self.rho_p                               # [kg/s] mass flow
             self.p_c = (self.c_real * self.rho_p * self.a * self.S / self.A_t)**(1/(1-self.n)) # [Pa] combustion chamber pressure
-            if self.V_e is None:
+            if self.p_ratio is None:
                 self.p_e = fsolve(self.solve_p_e, self.p_c/1000)[0]                     # [Pa] exhaust pressure
                 self.V_e = np.sqrt(2*self.gamma/(self.gamma-1) * self.R_A/self.M * self.T_c * (1-(self.p_e/self.p_c)**((self.gamma-1)/self.gamma)))   # [m/s] exhaust velocity
+                self.p_ratio = self.p_e/self.p_c
+            else:
+                self.p_e = self.p_c * self.p_ratio
             self.F_T = self.m_dot * self.V_e + (self.p_e - self.p_a) * self.A_e     # [N] thrust
             self.F_T *= self.eta_F_T
 
@@ -113,9 +115,9 @@ class SRM_thrust_rk4:
         k4 = self.compute_magnitude(t + dt, y + dt * k3)
         self.last_t = t + dt
         y_der = (k1 + 2*k2 + 2*k3 + k4) / 6
-        self.F_t = y_der[2]
-        y_der[-1] /= dt
+        self.F_T = y_der[-1]
         y_next = y + dt * y_der
+        y_next[-1] = y_der[-1]
         return y_next, y_der
 
     def euler(self, dt):
@@ -123,39 +125,52 @@ class SRM_thrust_rk4:
         y = [self.M_p, self.b]
         k = self.compute_magnitude(t, y)
         self.last_t = t + dt
-        k[-1] /= dt
         y_next = y + dt * k
+        y_next[-1] = k[-1]
         self.M_p, self.b = y_next
         return y_next, k
 
-    def simulate_full_burn(self, dt=1e-3, use_rk4=True, use_cpp=True, *args, **kwargs):
+    def simulate_full_burn(self, dt=1e-3, use_rk4=True, use_cpp=False, filename=None, *args, **kwargs):
         # x     = [M_p,   b]
         # x_dot = [m_dot, r]
         b_s, p_c_s, M_p_s = [], [], []
-        if not use_cpp:
-            y = [self.M_p, self.b, 0]
-            # Keep computing thrust until the magnitude settles to 0
-            while self.last_t is None or np.sum(self.saved_magnitudes[-2:]) != 0:
-                if use_rk4:
-                    y, der = self.rk_4(dt, y)
-                else:
-                    y, der = self.euler(dt, y)
-                self.saved_magnitudes.append(der[2])
-                self.saved_burn_times.append(self.last_t)
-                self.saved_m_dot_s.append(der[0])
-                b_s.append(y[1])
-                M_p_s.append(y[0])
+        if filename is None:
+            if use_cpp:
+                from thrust.models.CPP.SRM_cpp import run_sim
+                # print("Running C++ thrust sim")
+                self.saved_burn_times, self.saved_magnitudes, self.saved_m_dot_s = run_sim(
+                    self.geometry_model.R_o,
+                    self.geometry_model.R_i,
+                    self.geometry_model.N_f,
+                    self.geometry_model.w_f,
+                    self.geometry_model.L_f,
+                    self.geometry_model.L,
+                    dt
+                )
+            else:
+                y = [self.M_p, self.b, 0]
+                # print("Running Python thrust sim")
+                # Keep computing thrust until the magnitude settles to 0
+                while self.last_t is None or np.sum(self.saved_magnitudes[-2:]) != 0:
+                    if use_rk4:
+                        y, der = self.rk_4(dt, y)
+                    else:
+                        y, der = self.euler(dt, y)
+                    self.saved_magnitudes.append(der[2])
+                    self.saved_burn_times.append(self.last_t)
+                    self.saved_m_dot_s.append(der[0])
+                    b_s.append(y[1])
+                    M_p_s.append(y[0])
         else:
-            from thrust.models.CPP.SRM_cpp import run_sim
-            self.saved_burn_times, self.saved_magnitudes, self.saved_m_dot_s = run_sim(
-                self.geometry_model.R_o,
-                self.geometry_model.R_i,
-                self.geometry_model.N_f,
-                self.geometry_model.w_f,
-                self.geometry_model.L_f,
-                self.geometry_model.L,
-                dt
-            )
+            thrust_results = np.load(filename)
+            print("Taking thrust from", filename)
+            self.saved_burn_times, self.saved_magnitudes, masses = list(thrust_results["times"]), list(thrust_results["magnitudes"]), list(thrust_results["masses"])
+            mass_diff = np.asarray(np.diff(masses))
+            time_diff = np.asarray(np.diff(self.saved_burn_times))
+            self.saved_m_dot_s = list(mass_diff/time_diff)
+            self.saved_m_dot_s.append(self.saved_m_dot_s[-1])
+            self.saved_m_dot_s.insert(0, 0)
+            self.saved_burn_times.insert(0, 0), self.saved_magnitudes.insert(0, 0)
 
         self.saved_burn_times.insert(0, 0), self.saved_magnitudes.insert(0, 0), self.saved_m_dot_s.insert(0, 0)
         

@@ -74,6 +74,7 @@ public:
     double _Gamma = 0.0;
     double _p_c = 0.0;
     double _last_t = 0.0;
+    double _p_ratio = -1.0;
 
     SRM_thrust_model(
         SRM_geometry current_geo
@@ -122,9 +123,13 @@ public:
         }
         double mdot = S * _r * _rho_p;
         _p_c = pow(_c_real * _rho_p * _a * S / _A_t, 1/(1-_n));
-        if (_Ve == 0.0) {
-            _p_e = bisection(1.0, 5000.0);
+        if (_p_ratio == -1.0) {
+            _p_e = bisection(1.0, 1.0e5);
             _Ve = sqrt(2*_gamma/(_gamma-1) * _Ra/_M * _T_c * (1-pow((_p_e/_p_c),((_gamma-1)/_gamma))));
+            _p_ratio = _p_e / _p_c;
+        }
+        else {
+            _p_e = _p_ratio * _p_c;
         }
         double F_T = mdot * _Ve + (_p_e - _p_a) * _A_e;
 
@@ -153,9 +158,9 @@ public:
         double * k4 = magnitude(t + dt, y3);
         double * y_der = new double[3];
         for (int i = 0; i < 3; i++) { y_der[i] = (k1[i] + 2*k2[i] + 2*k3[i] + k4[i]) / 6; }
-        y_der[2] /= dt;
         double * y_next = new double[3];
-        for (int i = 0; i < 3; i++) { y_next[i] = y[i] + dt * y_der[i]; }
+        for (int i = 0; i < 2; i++) { y_next[i] = y[i] + dt * y_der[i]; }
+        y_next[2] = y_der[2];
         _last_t += dt;
         return std::make_pair(y_next, y_der);
     }
@@ -169,7 +174,7 @@ public:
         std::pair <double*, double*> integ_res;
         double * y = new double[3];
         double * y_der;
-        y[0] = 203.96103468806027;
+        y[0] = 1e3;
         int zero_thrust = 0;
         while ((zero_thrust != 2)) {
             integ_res = rk4(dt, y);
