@@ -126,7 +126,7 @@ class MAV_ascent:
         # Set the rocket stage as the body to propagate
         self.bodies_to_propagate = [self.current_name]
 
-    def create_accelerations(self, only_thrust_dict=False, thrust_fname=None):
+    def create_accelerations(self, only_thrust_dict=False, thrust_fname=None, thrust_dt=None, use_cpp=False):
         # Setup the MAV thrust class from the thrust models input to this ascent class
         self.thrust = MAV_thrust(
             self,
@@ -134,7 +134,9 @@ class MAV_ascent:
             self.thrust_models[self.current_stage-1],
             self.body_fixed_thrust_direction_y[self.current_stage-1],
             self.body_fixed_thrust_direction_z[self.current_stage-1],
-            thrust_filename=thrust_fname)
+            thrust_filename=thrust_fname,
+            dt=thrust_dt,
+            use_cpp=use_cpp)
 
         # Define the thrust acceleration direction and magnitude from the thrust class
         thrust_direction_settings = propagation_setup.thrust.custom_thrust_direction(self.thrust.get_thrust_orientation)
@@ -231,7 +233,7 @@ class MAV_ascent:
         else:
             self.dependent_variables_to_save = []
 
-    def create_termination_settings(self, end_time=200*60):
+    def create_termination_settings(self, end_time=200*60, exact_time=False):
         # For the first stage, terminate at apogee or below a certain altitude
         if self.current_stage == 1:
             # Define termination settings to finish when the vehicle get below -10km
@@ -263,7 +265,9 @@ class MAV_ascent:
                 use_as_lower_limit=True)
 
             # Terminate after a given time has elapsed since the launch epoch
-            termination_max_time_settings = propagation_setup.propagator.time_termination(self.launch_epoch + end_time)
+            termination_max_time_settings = propagation_setup.propagator.time_termination(
+                self.launch_epoch + end_time,
+                terminate_exactly_on_final_condition=exact_time)
             
             # Combine both termination settings, to finish as soon as one of the two is reached
             self.combined_termination_settings = propagation_setup.propagator.hybrid_termination(
@@ -324,12 +328,12 @@ class MAV_ascent:
                 tolerance = np.inf
             # Otherwise, define the variable step integrator with a tolerance of 1e-18
             else:
-                initial_time_step = 1e-4
-                minimum_time_step = 7.5e-5
-                maximum_time_step = 45
-                tolerance = 1e-15
-            # Use RKF7(8) coefficients
-            coefficients = propagation_setup.integrator.rkf_78
+                initial_time_step = 4.5e-5
+                minimum_time_step = 3e-5
+                maximum_time_step = 60
+                tolerance = 1e-7
+            # Use RKF4(5) coefficients
+            coefficients = propagation_setup.integrator.rkf_45
             self.integrator_settings = propagation_setup.integrator.runge_kutta_variable_step_size(
                 self.initial_epoch,
                 initial_time_step,
@@ -338,10 +342,11 @@ class MAV_ascent:
                 maximum_time_step,
                 relative_error_tolerance=tolerance,
                 absolute_error_tolerance=tolerance,
-                maximum_factor_increase=10,
-                minimum_factor_increase=0.05)
+                maximum_factor_increase=1.01,
+                minimum_factor_increase=0.01,
+                throw_exception_if_minimum_step_exceeded=False)
 
-    def run_simulation(self, return_raw=False, return_count=False):
+    def run_simulation(self, return_raw=False, return_count=False, return_success_status=False):
         # Run the ascent simulation (do not print the state or dependent variable content)
         dynamics_simulator = numerical_simulation.SingleArcSimulator(
             self.bodies,
@@ -372,5 +377,7 @@ class MAV_ascent:
         # ... including the number of function evaluations
         if return_count:
             f_evals = list(dynamics_simulator.cumulative_number_of_function_evaluations.values())[-1]
+            if return_success_status:
+                return tuple((*ret, f_evals, dynamics_simulator.integration_completed_successfully))
             return tuple((*ret, f_evals))
         return ret
