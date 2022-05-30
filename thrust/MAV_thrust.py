@@ -13,23 +13,27 @@ from tudatpy.kernel.numerical_simulation import environment
 
 # Custom imports
 from thrust.solid_thrust import SRM_thrust
+from thrust.solid_thrust_multi_stage import SRM_thrust_rk4
 
 class MAV_thrust:
 
-    def __init__(self, ascent_model, angle, thrust_model, body_directions_y=0, body_directions_z=0, print_status=False, dt=1e-4, thrust_filename=None):
+    def __init__(self, ascent_model, angle, thrust_model, body_directions_y=0, body_directions_z=0,
+    print_status=False, dt=None, thrust_filename=None, thrust_devs=[0, 0], use_cpp=False):
         self.angle = angle
         self.thrust_model = thrust_model
+        if dt is None:
+            dt = 2.0e-6 if ascent_model.current_stage == 1 else 1.5e-2
 
         if type(self.thrust_model) == list and type(self.thrust_model[0]) in [float, int]:
             self.thrust_type = "constant"
             self.magnitude = self.thrust_model[0]
             self.Isp = self.thrust_model[1]
             self.burn_time = self.thrust_model[2]
-        elif type(self.thrust_model) == SRM_thrust:
+        elif type(self.thrust_model) == SRM_thrust or type(self.thrust_model) == SRM_thrust_rk4:
             self.thrust_type = "from_geometry"
             if print_status:
-                print("Pre-simulating SRM burn...", end="\r")
-            self.thrust_model.simulate_full_burn(dt=dt, filename=thrust_filename)
+                print("Pre-simulating SRM burn with dt = %.2e..."%dt, end="\r")
+            self.thrust_model.simulate_full_burn(dt=dt, filename=thrust_filename, use_cpp=use_cpp)
             if print_status:
                 print("Pre-simulating SRM burn finished.")
             self.magnitude_function = self.thrust_model.magnitude_interpolator
@@ -52,6 +56,7 @@ class MAV_thrust:
         self.ascent_model = ascent_model
         self.first_t = None
         self.last_t = None
+        self.thrust_devs = thrust_devs
 
     def compute_time_elapsed(self, time):
         if self.first_t is None:
@@ -70,26 +75,28 @@ class MAV_thrust:
             return False
         return True
 
-    def get_thrust_magnitude(self, time):
+    def get_thrust_magnitude(self, time_input, use_time_input=False):
         if self.thrust_type == "constant":
             return self.magnitude
         elif self.thrust_type == "from_geometry":
-            return self.magnitude_function(self.time_elapsed)
+            t = time_input if use_time_input else self.time_elapsed
+            return self.magnitude_function(t)+self.thrust_devs[0]
 
-    def get_specific_impulse(self, time):
+    def get_specific_impulse(self, time, use_time_input=False):
         if self.thrust_type == "constant":
             return self.Isp
         elif self.thrust_type == "from_geometry":
             return 0
 
-    def get_mass_flow(self, time):
-        if self.last_t != time:
-            self.compute_time_elapsed(time)
+    def get_mass_flow(self, time_input, use_time_input=False):
+        if self.last_t != time_input:
+            self.compute_time_elapsed(time_input)
 
         if self.thrust_type == "from_geometry":
             if self.time_elapsed > self.burn_time:
                 return 0
-            return -np.fabs(self.m_dot_function(self.time_elapsed))
+            t = time_input if use_time_input else self.time_elapsed
+            return -np.fabs(self.m_dot_function(t))+self.thrust_devs[1]
         else:
             raise NotImplementedError("No mass flow model has been implemented in this case.")
 
