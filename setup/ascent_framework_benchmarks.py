@@ -129,7 +129,7 @@ class MAV_ascent:
         # Set the rocket stage as the body to propagate
         self.bodies_to_propagate = [self.current_name]
 
-    def create_accelerations(self, only_thrust_dict=False, thrust_filename=None):
+    def create_accelerations(self, only_thrust_dict=False, thrust_filename=None, thrust_devs=[0, 0]):
         if self.powered:
             # Setup the MAV thrust class from the thrust models input to this ascent class
             self.thrust = MAV_thrust(
@@ -139,7 +139,8 @@ class MAV_ascent:
                 self.body_fixed_thrust_direction_y[self.current_stage-1],
                 self.body_fixed_thrust_direction_z[self.current_stage-1],
                 dt=self.dt,
-                thrust_filename=thrust_filename)
+                thrust_filename=thrust_filename,
+                thrust_devs=thrust_devs)
 
             # Define the thrust acceleration direction and magnitude from the thrust class
             thrust_direction_settings = propagation_setup.thrust.custom_thrust_direction(self.thrust.get_thrust_orientation)
@@ -182,6 +183,7 @@ class MAV_ascent:
                 self.current_body.set_constant_mass(final_state[-1])
             # Set the second stage initial state as the last one from the first stage (ignoring mass)
             self.initial_state = final_state[:6]
+
         elif state is not None:
             self.initial_epoch = state[0]
             self.initial_state = state[1]
@@ -223,7 +225,7 @@ class MAV_ascent:
         # Use a pre-defined set of dependent variables (their names should be self-explanatory)
         self.dependent_variables_to_save = []
 
-    def create_termination_settings(self, end_time=200*60):
+    def create_termination_settings(self, end_time=200*60, print_progress=False):
         # Terminations:
         # * Stage 1:
         #   - powered: burnoff (time = burn_time)
@@ -231,6 +233,14 @@ class MAV_ascent:
         # * Stage 2:
         #   - powered: burnoff
         #   - unpowered: end_time
+
+        self.i = 0
+        def print_t(t):
+            if self.i % 500 == 0:
+                print("Time %.2f s" % t, end="\r")
+            self.i += 1
+            return False
+        fake_term_setting = propagation_setup.propagator.custom_termination(print_t)
 
         # For the first stage, terminate at apogee or below a certain altitude
         if self.powered:
@@ -250,6 +260,9 @@ class MAV_ascent:
             )
         elif self.current_stage == 2:
             self.combined_termination_settings = propagation_setup.propagator.time_termination(self.launch_epoch + end_time)
+
+        if print_progress:
+            self.combined_termination_settings = propagation_setup.propagator.hybrid_termination( [self.combined_termination_settings, fake_term_setting], fulfill_single_condition=True )
 
     def create_propagator_settings(self, initial_state_deviation=None):
         if initial_state_deviation is None:
@@ -302,17 +315,19 @@ class MAV_ascent:
             self.propagator_settings = translational_propagator_settings
 
     def create_integrator_settings(self, fixed_step=None):
-        coefficients = propagation_setup.integrator.rk_1412
+        coefficients = propagation_setup.integrator.rkf_1412
         if fixed_step is not None:
             self.integrator_settings = propagation_setup.integrator.runge_kutta_fixed_step_size(
-                self.initial_epoch, fixed_step, coefficients
+                self.initial_epoch, fixed_step, coefficients, propagation_setup.integrator.OrderToIntegrate.higher
             )
         # Otherwise, define the variable step integrator with a tolerance of 1e-18
         else:
-            initial_time_step = 1e-3
-            minimum_time_step = 1e-8
+            initial_time_step = 4.5e-5
+            minimum_time_step = 3e-5
             maximum_time_step = 60
-            tolerance = 1e-18
+            tolerance = 1e-7
+            # Use RKF4(5) coefficients
+            coefficients = propagation_setup.integrator.rkf_45
             self.integrator_settings = propagation_setup.integrator.runge_kutta_variable_step_size(
                 self.initial_epoch,
                 initial_time_step,
@@ -321,8 +336,9 @@ class MAV_ascent:
                 maximum_time_step,
                 relative_error_tolerance=tolerance,
                 absolute_error_tolerance=tolerance,
-                maximum_factor_increase=2,
-                minimum_factor_increase=0.05)
+                maximum_factor_increase=5,
+                minimum_factor_increase=minimum_time_step/maximum_time_step,
+                throw_exception_if_minimum_step_exceeded=False)
 
     def run_simulation(self, return_raw=False, return_count=False):
         # Run the ascent simulation (do not print the state or dependent variable content)
@@ -333,6 +349,7 @@ class MAV_ascent:
             print_dependent_variable_data=False,
             print_state_data=False
         )
+        print()
 
         # Get the dictionaries with the state and dependent variable histories
         raw_states, raw_dep_vars = dynamics_simulator.state_history, dynamics_simulator.dependent_variable_history
