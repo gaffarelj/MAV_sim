@@ -1,0 +1,5 @@
+For Point Mass (vs SH D/O 12), final position difference of 1.22e+05 m
+For SH D/O 2 (vs SH D/O 12), final position difference of 7.36e+03 m
+For SH D/O 4 (vs SH D/O 12), final position difference of 1.25e+03 m
+For SH D/O 6 (vs SH D/O 12), final position difference of 7.10e+02 m
+For SH D/O 8 (vs SH D/O 12), final position difference of 3.00e+02 m
