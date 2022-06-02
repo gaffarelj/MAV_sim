@@ -29,7 +29,7 @@ analyse_gravity = True
 
 n_accs = 0
 if analyse_gravity:
-    n_accs = 6
+    n_accs = 7
     f_name = "gravity"
 allowable_errors = [5e3-3.6e3, 5-3.3]
 
@@ -37,8 +37,8 @@ def environment_names_and_settings(i, acc_dict):
     if analyse_gravity:
         acc_dict["Mars"] = [propagation_setup.acceleration.aerodynamic()]
         if i == 0:
-            acc_dict["Mars"].append(propagation_setup.acceleration.spherical_harmonic_gravity(12, 12))
-            name = "SH D/O 12"
+            acc_dict["Mars"].append(propagation_setup.acceleration.spherical_harmonic_gravity(14, 14))
+            name = "SH D/O 14"
         elif i == 1:
             acc_dict["Mars"].append(propagation_setup.acceleration.point_mass_gravity())
             name = "Point Mass"
@@ -54,9 +54,13 @@ def environment_names_and_settings(i, acc_dict):
         elif i == 5:
             acc_dict["Mars"].append(propagation_setup.acceleration.spherical_harmonic_gravity(8, 8))
             name = "SH D/O 8"
+        elif i == 6:
+            acc_dict["Mars"].append(propagation_setup.acceleration.spherical_harmonic_gravity(10, 10))
+            name = "SH D/O 10"
     return name, acc_dict
 
 fig1 = plt.figure(figsize=(9,5))
+fig2 = plt.figure(figsize=(9,5))
 base_states = None
 base_label = None
 for i_acc in range(n_accs):
@@ -145,30 +149,32 @@ for i_acc in range(n_accs):
         dep_vars = np.concatenate((stage_res[0][2], stage_res[1][2]))
 
     # Plot position over time
-    states = {t: state for t, state in zip(times, states)}
+    states_dict = {}
+    for t, state in zip(times, states):
+        if np.fabs(t-t_sep) > 60:
+            states_dict[t] = state
     if base_states is None:
-        base_states = states
+        base_states = states_dict
         base_label = label_acc
     else:
-        states_diff = util.compare_results(base_states, states, np.arange(60, 159*60, 0.1))
-        states_diff_array = util.result2array(states_diff)
+        t0, tend = 60, 157*60
+        states_diff_1 = util.compare_results(base_states, states_dict, np.arange(t0, t_sep-90, 0.1))
+        states_diff_2 = util.compare_results(base_states, states_dict, np.arange(t_sep+90, tend, 0.1))
+        states_diff_array_1 = util.result2array(states_diff_1)
+        states_diff_array_2 = util.result2array(states_diff_2)
+        states_diff_array = np.concatenate((states_diff_array_1, states_diff_array_2))
         diff_times = states_diff_array[:,0]
         positions_diff = np.linalg.norm(states_diff_array[:,1:4], axis=1)
+        velocity_diff = np.linalg.norm(states_diff_array[:,4:7], axis=1)
         label = "%s (vs %s)" % (label_acc, base_label)
+        plt.figure(fig1)
         plt.plot(diff_times/60, positions_diff, label=label)
-        print("For %s, final position difference of %.2e m" %(label, positions_diff[-1]))
+        plt.figure(fig2)
+        plt.plot(diff_times/60, velocity_diff, label=label)
+        print("For %s, final difference of %.2e m and %.2e m/s" %(label, positions_diff[-1], velocity_diff[-1]))
 
-# # Plot velocity over time
-# velocities = np.linalg.norm(states[:,3:6]-states[0,3:6], axis=1)
-# plt.figure(figsize=(9,5))
-# plt.plot(times/60, velocities)
-# plt.xlabel("Time [min]")
-# plt.ylabel("$v(t) - v(0)$ [m/s]")
-# plt.title("Velocity over time")
-# plt.grid()
-# plt.yscale("log")
-# plt.tight_layout()
 
+plt.figure(fig1)
 xlims = plt.xlim()
 plt.hlines(allowable_errors[0], -1e3, 1e3, colors="orange", linestyles="dashed")
 plt.xlim(xlims)
@@ -179,4 +185,17 @@ plt.grid()
 plt.yscale("log")
 plt.legend(loc="lower right")
 plt.tight_layout()
-plt.savefig(sys.path[0]+"/plots/setup/environment/accelerations_%s.pdf" % f_name)
+plt.savefig(sys.path[0]+"/plots/setup/environment/accelerations_%s_position.pdf" % f_name)
+
+plt.figure(fig2)
+xlims = plt.xlim()
+plt.hlines(allowable_errors[1], -1e3, 1e3, colors="orange", linestyles="dashed")
+plt.xlim(xlims)
+plt.xlabel("Time [min]")
+plt.ylabel("$v(t) - v(0)$ [m]")
+plt.title("Velocity over time")
+plt.grid()
+plt.yscale("log")
+plt.legend(loc="lower right")
+plt.tight_layout()
+plt.savefig(sys.path[0]+"/plots/setup/environment/accelerations_%s_velocity.pdf" % f_name)
