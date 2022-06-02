@@ -1,0 +1,2 @@
+For Schwarzschild relativistic correction (vs None), final difference of 1.91e+02 m and 1.75e-01 m/s
+For Radiation pressure (vs None), final difference of 2.77e+02 m and 2.54e-01 m/s
