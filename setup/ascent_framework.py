@@ -81,7 +81,9 @@ class MAV_ascent:
         more_bodies=False,
         custom_exponential_model=False,
         use_MCD=False,
-        use_GRAM=False
+        use_GRAM=False,
+        use_new_coeffs=False,
+        add_sun=False
     ):
         # Save which stage is now running, and create its name
         self.current_stage = stage
@@ -89,9 +91,9 @@ class MAV_ascent:
 
         # Create Mars body with exponential atmosphere
         bodies_to_create = ["Mars"]
-        if include_radiation_pressure:
+        if include_radiation_pressure or add_sun:
             bodies_to_create = ["Mars", "Sun"]
-        if more_bodies:
+        elif more_bodies:
             bodies_to_create = ["Mars", "Sun", "Jupiter", "Venus", "Earth", "Saturn"]
         body_settings = environment_setup.get_default_body_settings(bodies_to_create, "Mars", "J2000")
         if custom_exponential_model:
@@ -138,9 +140,12 @@ class MAV_ascent:
         # Apply different aerodynamic coefficients and initial mass for both stages
         if stage == 1:
             self.current_body.set_constant_mass(self.stage_1_wet_mass)
+            add_txt = ""
+            if use_new_coeffs:
+                add_txt = "new_"
             # Use the force and moment aerodynamic coefficients from Missile DATCOM
-            force_coefficients_files = {i: sys.path[0] + "/data/coefficients/CF%s.dat" % l for i, l in enumerate(["x", "y", "z"])}
-            moment_coefficients_files = {i: sys.path[0] + "/data/coefficients/CM%s.dat" % l for i, l in enumerate(["x", "y", "z"])}
+            force_coefficients_files = {i: sys.path[0] + "/data/coefficients/%sCF%s.dat" % (add_txt, l) for i, l in enumerate(["x", "y", "z"])}
+            moment_coefficients_files = {i: sys.path[0] + "/data/coefficients/%sCM%s.dat" % (add_txt, l) for i, l in enumerate(["x", "y", "z"])}
             coefficient_settings = environment_setup.aerodynamic_coefficients.tabulated_from_files(
                 force_coefficient_files=force_coefficients_files,
                 moment_coefficient_files=moment_coefficients_files,
@@ -181,7 +186,14 @@ class MAV_ascent:
         # Set the rocket stage as the body to propagate
         self.bodies_to_propagate = [self.current_name]
 
-    def create_accelerations(self, only_thrust_dict=False, thrust_fname=None, thrust_dt=None, use_cpp=False):
+    def create_accelerations(
+        self,
+        only_thrust_dict=False,
+        thrust_fname=None,
+        thrust_dt=None,
+        use_cpp=False,
+        better_precision=False
+    ):
         # Setup the MAV thrust class from the thrust models input to this ascent class
         self.thrust = MAV_thrust(
             self,
@@ -215,9 +227,14 @@ class MAV_ascent:
             return accelerations_on_vehicle
 
         # Add environmental accelerations (Mars SH up to D/O 4 and aerodynamics)
+        SH_order = 6 if better_precision else 4
         accelerations_on_vehicle["Mars"] = [
-                propagation_setup.acceleration.spherical_harmonic_gravity(4, 4),
+                propagation_setup.acceleration.spherical_harmonic_gravity(SH_order, SH_order),
                 propagation_setup.acceleration.aerodynamic()
+            ]
+        if better_precision:
+            accelerations_on_vehicle["Sun"] = [
+                propagation_setup.acceleration.point_mass_gravity()
             ]
 
         # Compile the dict of accelerations acting on the vehicle, and create the models for them
@@ -327,7 +344,6 @@ class MAV_ascent:
             # Combine both termination settings, to finish as soon as one of the two is reached
             self.combined_termination_settings = propagation_setup.propagator.hybrid_termination(
             [termination_max_time_settings, termination_min_altitude_settings], fulfill_single_condition=True)
-
 
     def create_propagator_settings(self):
         # Create translational propagator settings, using the defined bodies/models
