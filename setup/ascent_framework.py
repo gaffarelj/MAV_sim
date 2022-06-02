@@ -73,13 +73,17 @@ class MAV_ascent:
         # Load the SPICE kernel
         spice.load_standard_kernels()
 
-    def create_bodies(self, stage, include_aero=True):
+    def create_bodies(self, stage, include_aero=True, include_radiation_pressure=False, more_bodies=False):
         # Save which stage is now running, and create its name
         self.current_stage = stage
         self.current_name = "MAV stage %i" % self.current_stage
 
         # Create Mars body with exponential atmosphere
         bodies_to_create = ["Mars"]
+        if include_radiation_pressure:
+            bodies_to_create = ["Mars", "Sun"]
+        if more_bodies:
+            bodies_to_create = ["Mars", "Sun", "Jupiter", "Venus", "Earth", "Saturn"]
         body_settings = environment_setup.get_default_body_settings(bodies_to_create, "Mars", "J2000")
         body_settings.get("Mars").atmosphere_settings = environment_setup.atmosphere.exponential_predefined("Mars")
         self.bodies = environment_setup.create_system_of_bodies(body_settings)
@@ -122,6 +126,15 @@ class MAV_ascent:
         # Only include the aerodynamic coefficients if specified (otherwise the mass will still be set)
         if include_aero:
             environment_setup.add_aerodynamic_coefficient_interface(self.bodies, self.current_name, coefficient_settings)
+
+        if include_radiation_pressure:
+            # Add solar radiation settings
+            reference_area_radiation = 2.8*0.57 if self.current_stage == 1 else 0.57*2.8*0.25
+            radiation_pressure_coefficient = 1.2
+            occulting_bodies = ["Mars"]
+            radiation_pressure_settings = environment_setup.radiation_pressure.cannonball(
+                "Sun", reference_area_radiation, radiation_pressure_coefficient, occulting_bodies)
+            environment_setup.add_radiation_pressure_interface(self.bodies, self.current_name, radiation_pressure_settings)
 
         # Set the rocket stage as the body to propagate
         self.bodies_to_propagate = [self.current_name]
@@ -331,7 +344,7 @@ class MAV_ascent:
                 initial_time_step = 4.5e-5
                 minimum_time_step = 3e-5
                 maximum_time_step = 60
-                tolerance = 1e-7
+                tolerance = 1e-7#*1e3
             # Use RKF4(5) coefficients
             coefficients = propagation_setup.integrator.rkf_45
             self.integrator_settings = propagation_setup.integrator.runge_kutta_variable_step_size(
@@ -342,8 +355,8 @@ class MAV_ascent:
                 maximum_time_step,
                 relative_error_tolerance=tolerance,
                 absolute_error_tolerance=tolerance,
-                maximum_factor_increase=1.01,
-                minimum_factor_increase=0.01,
+                maximum_factor_increase=1.01,#+0.1,
+                minimum_factor_increase=0.01,#+0.1,
                 throw_exception_if_minimum_step_exceeded=False)
 
     def run_simulation(self, return_raw=False, return_count=False, return_success_status=False):
