@@ -73,7 +73,16 @@ class MAV_ascent:
         # Load the SPICE kernel
         spice.load_standard_kernels()
 
-    def create_bodies(self, stage, include_aero=True, include_radiation_pressure=False, more_bodies=False):
+    def create_bodies(
+        self,
+        stage,
+        include_aero=True,
+        include_radiation_pressure=False,
+        more_bodies=False,
+        custom_exponential_model=False,
+        use_MCD=False,
+        use_GRAM=False
+    ):
         # Save which stage is now running, and create its name
         self.current_stage = stage
         self.current_name = "MAV stage %i" % self.current_stage
@@ -85,7 +94,40 @@ class MAV_ascent:
         if more_bodies:
             bodies_to_create = ["Mars", "Sun", "Jupiter", "Venus", "Earth", "Saturn"]
         body_settings = environment_setup.get_default_body_settings(bodies_to_create, "Mars", "J2000")
-        body_settings.get("Mars").atmosphere_settings = environment_setup.atmosphere.exponential_predefined("Mars")
+        if custom_exponential_model:
+            def rho_expo(h):
+
+                if h <= 25e3:
+                    rho_0 = 0.0159
+                    h_s = 11049
+                else:
+                    rho_0 = 0.0525
+                    h_s = 7295
+                return rho_0 * np.exp(-h/h_s)
+            body_settings.get("Mars").atmosphere_settings = environment_setup.atmosphere.custom_constant_temperature(
+                rho_expo,
+                constant_temperature=215,
+                specific_gas_constant=197,
+                ratio_of_specific_heats=1.3
+            )
+        elif use_MCD or use_GRAM:
+            # Use the GRAM (2010) atmospheric model
+            if use_GRAM:
+                from atmosphere import GRAM
+                GRAM_rho = GRAM.GRAM_atmo()
+                get_density = GRAM_rho.get_density
+            elif use_MCD:
+                from atmosphere import MCD
+                mcd = MCD.mcd_interface()
+                get_density = mcd.density
+            body_settings.get("Mars").atmosphere_settings = environment_setup.atmosphere.custom_four_dimensional_constant_temperature(
+                get_density,
+                constant_temperature=215,
+                specific_gas_constant=197,
+                ratio_of_specific_heats=1.3
+            )
+        else:
+            body_settings.get("Mars").atmosphere_settings = environment_setup.atmosphere.exponential_predefined("Mars")
         self.bodies = environment_setup.create_system_of_bodies(body_settings)
         self.central_bodies = ["Mars"]
 
