@@ -163,7 +163,7 @@ class SRM_thrust_rk4:
                     M_p_s.append(y[0])
         else:
             thrust_results = np.load(filename)
-            print("Taking thrust from", filename)
+            # print("Taking thrust from", filename)
             self.saved_burn_times, self.saved_magnitudes, masses = list(thrust_results["times"]), list(thrust_results["magnitudes"]), list(thrust_results["masses"])
             mass_diff = np.asarray(np.diff(masses))
             time_diff = np.asarray(np.diff(self.saved_burn_times))
