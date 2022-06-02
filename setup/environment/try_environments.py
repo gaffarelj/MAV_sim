@@ -25,8 +25,8 @@ from thrust.models.spherical import spherical_SRM
 from thrust.solid_thrust_multi_stage import SRM_thrust_rk4 as SRM_thrust
 
 # Parameters
-analyse_gravity = False
-analyse_atmo = True ######### TODO
+analyse_gravity = True
+analyse_atmo = False
 analyse_misc = False
 analyse_other_pm = False
 
@@ -35,7 +35,7 @@ if analyse_gravity:
     n_accs = 7
     f_name = "gravity"
 elif analyse_atmo:
-    n_accs = None ######### TODO
+    n_accs = 4
     f_name = "atmo"
 elif analyse_misc:
     n_accs = 3
@@ -70,7 +70,18 @@ def environment_names_and_settings(i, acc_dict):
             acc_dict["Mars"].append(propagation_setup.acceleration.spherical_harmonic_gravity(10, 10))
             name = "SH D/O 10"
     elif analyse_atmo:
-        raise NotImplementedError
+        acc_dict["Mars"] = [
+            propagation_setup.acceleration.aerodynamic(),
+            propagation_setup.acceleration.spherical_harmonic_gravity(4, 4)
+        ]
+        if i == 0:
+            name = "Exponential atmosphere"
+        elif i == 1:
+            name = "Two-steps exponential atmosphere"
+        elif i == 2:
+            name = "GRAM 2010"
+        elif i == 3:
+            name = "MCD 5.3"
     elif analyse_misc:
         acc_dict["Mars"] = [
             propagation_setup.acceleration.aerodynamic(),
@@ -99,6 +110,8 @@ def environment_names_and_settings(i, acc_dict):
 
 fig1 = plt.figure(figsize=(9,5))
 fig2 = plt.figure(figsize=(9,5))
+if analyse_atmo:
+    fig3 = plt.figure(figsize=(9,5))
 base_states = None
 base_label = None
 for i_acc in range(n_accs):
@@ -141,7 +154,14 @@ for i_acc in range(n_accs):
     # Setup and run simulation for both stages
     stage_res = []
     for stage in [1, 2]:
-        MAV_ascent.create_bodies(stage=stage, include_radiation_pressure=analyse_misc, more_bodies=analyse_other_pm)
+        MAV_ascent.create_bodies(
+            stage=stage,
+            include_radiation_pressure=analyse_misc,
+            more_bodies=analyse_other_pm,
+            custom_exponential_model=(analyse_atmo and i_acc==1),
+            use_MCD=(analyse_atmo and i_acc==3),
+            use_GRAM=(analyse_atmo and i_acc==2)
+        )
         accelerations_dict = MAV_ascent.create_accelerations(use_cpp=(stage==1), only_thrust_dict=True, thrust_fname=glob.glob(sys.path[0]+"/data/best_integrator_dt/thrust_%i_dt_*.npz"%stage)[0])
         label_acc, accelerations_dict = environment_names_and_settings(i_acc, accelerations_dict)
         MAV_ascent.acceleration_models = propagation_setup.create_acceleration_models(
@@ -157,6 +177,7 @@ for i_acc in range(n_accs):
         MAV_ascent.create_initial_state()
         MAV_ascent.create_dependent_variables_to_save(default=False)
         MAV_ascent.dependent_variables_to_save.append(propagation_setup.dependent_variable.altitude(MAV_ascent.current_name, "Mars"))
+        MAV_ascent.dependent_variables_to_save.append(propagation_setup.dependent_variable.density(MAV_ascent.current_name, "Mars"))
         MAV_ascent.create_termination_settings(end_time=160*60, exact_time=True)
         MAV_ascent.create_propagator_settings()
         MAV_ascent.create_integrator_settings()
@@ -210,6 +231,10 @@ for i_acc in range(n_accs):
         plt.figure(fig2)
         plt.plot(diff_times/60, velocity_diff, label=label)
         print("For %s, final difference of %.2e m and %.2e m/s" %(label, positions_diff[-1], velocity_diff[-1]))
+    if analyse_atmo:
+        plt.figure(fig3)
+        # Plot altitude vs density
+        plt.plot(dep_vars[:,0]/1e3, dep_vars[:,1], label=label_acc)
 
 
 plt.figure(fig1)
@@ -230,10 +255,20 @@ xlims = plt.xlim()
 plt.hlines(allowable_errors[1], -1e3, 1e3, colors="orange", linestyles="dashed")
 plt.xlim(xlims)
 plt.xlabel("Time [min]")
-plt.ylabel("$v(t) - v(0)$ [m]")
+plt.ylabel("$v(t) - v(0)$ [m/s]")
 plt.title("Velocity over time")
 plt.grid()
 plt.yscale("log")
 plt.legend(loc="lower right")
 plt.tight_layout()
 plt.savefig(sys.path[0]+"/plots/setup/environment/accelerations_%s_velocity.pdf" % f_name)
+
+if analyse_atmo:
+    plt.figure(fig3)
+    plt.xlabel("Altitude [km]")
+    plt.ylabel("Density [kg/m3]")
+    plt.grid()
+    plt.yscale("log")
+    plt.legend(loc="lower right")
+    plt.tight_layout()
+    plt.savefig(sys.path[0]+"/plots/setup/environment/accelerations_%s_density.pdf" % f_name)
