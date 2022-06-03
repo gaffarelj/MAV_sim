@@ -345,7 +345,7 @@ class MAV_ascent:
             self.combined_termination_settings = propagation_setup.propagator.hybrid_termination(
             [termination_max_time_settings, termination_min_altitude_settings], fulfill_single_condition=True)
 
-    def create_propagator_settings(self):
+    def create_propagator_settings(self, propagator_type=propagation_setup.propagator.cowell):
         # Create translational propagator settings, using the defined bodies/models
         translational_propagator_settings = propagation_setup.propagator.translational(
             self.central_bodies,
@@ -353,7 +353,7 @@ class MAV_ascent:
             self.bodies_to_propagate,
             self.initial_state,
             self.combined_termination_settings,
-            propagation_setup.propagator.cowell,
+            propagator_type,
             output_variables=self.dependent_variables_to_save
         )
         
@@ -387,7 +387,7 @@ class MAV_ascent:
             self.combined_termination_settings,
             self.dependent_variables_to_save)
 
-    def create_integrator_settings(self, fixed_step=None, empty_settings=False):
+    def create_integrator_settings(self, fixed_step=None, empty_settings=False, better_accuracy=False):
         if empty_settings:
             self.integrator_settings = None
         else:
@@ -402,7 +402,9 @@ class MAV_ascent:
                 initial_time_step = 4.5e-5
                 minimum_time_step = 3e-5
                 maximum_time_step = 60
-                tolerance = 1e-7#*1e3
+                tolerance = 1e-7
+                if better_accuracy:
+                    tolerance = 1e-13
             # Use RKF4(5) coefficients
             coefficients = propagation_setup.integrator.rkf_45
             self.integrator_settings = propagation_setup.integrator.runge_kutta_variable_step_size(
