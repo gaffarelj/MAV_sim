@@ -318,6 +318,11 @@ class MAV_ascent:
         if cpu_time_termination is not None:
             cpu_time_termination_settings = propagation_setup.propagator.cpu_time_termination( cpu_time_termination )
 
+        termination_abs_max_altitude_settings = propagation_setup.propagator.dependent_variable_termination(
+            dependent_variable_settings=propagation_setup.dependent_variable.altitude(self.current_name, "Mars"),
+            limit_value=1000e3,
+            use_as_lower_limit=False)
+
         # For the first stage, terminate at apogee or below a certain altitude
         if self.current_stage == 1:
             # Define termination settings to finish when the vehicle get below -10km
@@ -338,7 +343,7 @@ class MAV_ascent:
                 )
             
             # Combine both termination settings, to finish as soon as one of the two is reached
-            list_terminations_settings = [termination_min_altitude_settings, termination_apogee_settings]
+            list_terminations_settings = [termination_min_altitude_settings, termination_apogee_settings, termination_abs_max_altitude_settings]
             if cpu_time_termination is not None:
                 list_terminations_settings.append( cpu_time_termination_settings )
             if print_progress:
@@ -358,7 +363,7 @@ class MAV_ascent:
                 terminate_exactly_on_final_condition=exact_time)
             
             # Combine both termination settings, to finish as soon as one of the two is reached
-            list_terminations_settings = [termination_max_time_settings, termination_min_altitude_settings]
+            list_terminations_settings = [termination_max_time_settings, termination_min_altitude_settings, termination_abs_max_altitude_settings]
             if cpu_time_termination is not None:
                 list_terminations_settings.append( cpu_time_termination_settings )
             if print_progress:
