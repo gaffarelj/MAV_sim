@@ -3,6 +3,10 @@
 #include <cmath>
 #include <math.h>
 #include <vector>
+#include <stdlib.h>
+
+#include <pybind11/pybind11.h>
+#include <pybind11/stl.h>
 
 // SRM geometry class
 class SRM_geometry
@@ -33,7 +37,6 @@ public:
 
     // Function that returns the burning surface as a function of the burnt distance
     double burningS(double b) {
-
         if ( _R_i + b >= _R_o ) {
             return 0.0;
         }
@@ -162,6 +165,13 @@ public:
         for (int i = 0; i < 2; i++) { y_next[i] = y[i] + dt * y_der[i]; }
         y_next[2] = y_der[2];
         _last_t += dt;
+        delete(k1);
+        delete(k2);
+        delete(k3);
+        delete(k4);
+        delete(y1);
+        delete(y2);
+        delete(y3);
         return std::make_pair(y_next, y_der);
     }
 
@@ -171,28 +181,30 @@ public:
         std::vector<double> thrust_times;
         std::vector<double> thrust_magnitudes;
         std::vector<double> mass_flows;
-        std::pair <double*, double*> integ_res;
         double * y = new double[3];
-        double * y_der;
         y[0] = 1e3;
-        int zero_thrust = 0;
-        while ((zero_thrust != 2)) {
-            integ_res = rk4(dt, y);
+        int zero_thrust_count = 0;
+        double last_saved_dt = 0.0;
+        while ((zero_thrust_count != 2)) {
+            std::pair <double*, double*> integ_res = rk4(dt, y);
+            delete(y);
             y = integ_res.first;
-            y_der = integ_res.second;
+            double * y_der = integ_res.second;
+            last_saved_dt += dt;
             // Print the time, thrust magnitude, mass flow rate
             // std::cout << std::setprecision(7) << _last_t
             //    << "~" << std::setprecision(7) << y_der[2]
             //    << "~" << std::setprecision(7) << y_der[0] << std::endl;
             if (y_der[2] == 0.0) {
-                zero_thrust++;
+                zero_thrust_count++;
             }
-            else {
+            else if (last_saved_dt >= 0.0001) {
+                last_saved_dt = 0.0;
                 thrust_times.push_back(_last_t);
                 thrust_magnitudes.push_back(y_der[2]);
                 mass_flows.push_back(y_der[0]);
             }
-               
+            delete(y_der);
         }
         return std::make_tuple(thrust_times, thrust_magnitudes, mass_flows);
     }
@@ -223,9 +235,6 @@ run_sim(double Ro, double Ri, double Nf, double wf, double Lf, double L, double 
 //     SRM_thrust.sim_full_burn(dt);
 //   return 0;
 // }
-
-#include <pybind11/pybind11.h>
-#include <pybind11/stl.h>
 
 namespace py = pybind11;
 
