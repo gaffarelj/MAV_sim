@@ -145,8 +145,11 @@ class SRM_thrust_rk4:
                     self.geometry_model.w_f,
                     self.geometry_model.L_f,
                     self.geometry_model.L,
-                    dt
+                    dt,
+                    timeout=30.0
                 )
+                if self.saved_burn_times[-1] == -1:
+                    raise ValueError("Simulation timed out")
             else:
                 y = [self.M_p, self.b, 0]
                 # print("Running Python thrust sim")

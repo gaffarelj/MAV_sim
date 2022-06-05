@@ -4,6 +4,7 @@
 #include <math.h>
 #include <vector>
 #include <stdlib.h>
+#include <chrono>
 
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
@@ -176,16 +177,29 @@ public:
     }
 
     std::tuple<std::vector<double>, std::vector<double>, std::vector<double>>
-    sim_full_burn(double dt) {
+    sim_full_burn(double dt, double timeout) {
         // declare vector of undefined size to save thrust
         std::vector<double> thrust_times;
         std::vector<double> thrust_magnitudes;
         std::vector<double> mass_flows;
+        // Measure the current system time
+        std::chrono::steady_clock::time_point clock_begin = std::chrono::steady_clock::now();
         double * y = new double[3];
         y[0] = 1e3;
         int zero_thrust_count = 0;
         double last_saved_dt = 0.0;
         while ((zero_thrust_count != 2)) {
+            if (timeout != -1.0) {
+                // Measure the time elapsed in seconds
+                std::chrono::steady_clock::time_point clock_end = std::chrono::steady_clock::now();
+                double dt_elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(clock_end - clock_begin).count() / 1.0e3;
+                // Check if timeout has been reached
+                if (dt_elapsed > timeout) {
+                    std::cout << "*** Timeout reached, stopping burn simulation ***" << std::endl;
+                    std::vector<double> neg_vec(1, -1.0);
+                    return std::make_tuple(neg_vec, neg_vec, neg_vec);
+                }
+            }
             std::pair <double*, double*> integ_res = rk4(dt, y);
             delete(y);
             y = integ_res.first;
@@ -212,10 +226,10 @@ public:
 };
 
 std::tuple<std::vector<double>, std::vector<double>, std::vector<double>> 
-run_sim(double Ro, double Ri, double Nf, double wf, double Lf, double L, double dt) {
+run_sim(double Ro, double Ri, double Nf, double wf, double Lf, double L, double dt, double timeout=-1.0) {
     SRM_geometry SRM = SRM_geometry(Ro, Ri, Nf, wf, Lf, L);
     SRM_thrust_model SRM_thrust = SRM_thrust_model(SRM);
-    return SRM_thrust.sim_full_burn(dt);
+    return SRM_thrust.sim_full_burn(dt, timeout);
 }
 
 // int main(int argc, char *argv[]) {
@@ -246,7 +260,8 @@ PYBIND11_MODULE(SRM_cpp, m) {
         py::arg("wf"),
         py::arg("Lf"),
         py::arg("L"),
-        py::arg("dt")
+        py::arg("dt"),
+        py::arg("timeout") = -1.0
     );
 }
 
