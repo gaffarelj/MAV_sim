@@ -310,7 +310,8 @@ class MAV_ascent:
         self.i = 0
         def print_t(t):
             if self.i % 500 == 0:
-                print("Time %.2f s" % t, end="\r")
+                altitude = self.current_body.flight_conditions.altitude
+                print("Time %.2f s: altitude = %.2f km" % (t, altitude/1e3), end="\r")
             self.i += 1
             return False
         fake_term_settings = propagation_setup.propagator.custom_termination(print_t)
@@ -442,7 +443,8 @@ class MAV_ascent:
                 absolute_error_tolerance=tolerance,
                 maximum_factor_increase=1.01,#+0.1,
                 minimum_factor_increase=0.01,#+0.1,
-                throw_exception_if_minimum_step_exceeded=False)
+                throw_exception_if_minimum_step_exceeded=False,
+                assess_termination_on_minor_steps=True)
 
     def run_simulation(self, return_raw=False, return_count=False, return_success_status=False):
         # Run the ascent simulation (do not print the state or dependent variable content)
