@@ -305,7 +305,19 @@ class MAV_ascent:
         else:
             self.dependent_variables_to_save = []
 
-    def create_termination_settings(self, end_time=200*60, exact_time=False):
+    def create_termination_settings(self, end_time=200*60, exact_time=False, print_progress=False, cpu_time_termination=None):
+
+        self.i = 0
+        def print_t(t):
+            if self.i % 500 == 0:
+                print("Time %.2f s" % t, end="\r")
+            self.i += 1
+            return False
+        fake_term_settings = propagation_setup.propagator.custom_termination(print_t)
+
+        if cpu_time_termination is not None:
+            cpu_time_termination_settings = propagation_setup.propagator.cpu_time_termination( cpu_time_termination )
+
         # For the first stage, terminate at apogee or below a certain altitude
         if self.current_stage == 1:
             # Define termination settings to finish when the vehicle get below -10km
@@ -326,14 +338,18 @@ class MAV_ascent:
                 )
             
             # Combine both termination settings, to finish as soon as one of the two is reached
-            self.combined_termination_settings = propagation_setup.propagator.hybrid_termination(
-            [termination_apogee_settings, termination_min_altitude_settings], fulfill_single_condition=True)
+            list_terminations_settings = [termination_min_altitude_settings, termination_apogee_settings]
+            if cpu_time_termination is not None:
+                list_terminations_settings.append( cpu_time_termination_settings )
+            if print_progress:
+                list_terminations_settings.append( fake_term_settings )
+            self.combined_termination_settings = propagation_setup.propagator.hybrid_termination(list_terminations_settings, fulfill_single_condition=True)
         # For the second stage, terminate after a given time or below a given altitude
         else:
-            # Terminate if the altitude becomes lower than 50km
+            # Terminate if the altitude becomes lower than 25km
             termination_min_altitude_settings = propagation_setup.propagator.dependent_variable_termination(
                 dependent_variable_settings=propagation_setup.dependent_variable.altitude(self.current_name, "Mars"),
-                limit_value=50e3,
+                limit_value=25e3,
                 use_as_lower_limit=True)
 
             # Terminate after a given time has elapsed since the launch epoch
@@ -342,8 +358,12 @@ class MAV_ascent:
                 terminate_exactly_on_final_condition=exact_time)
             
             # Combine both termination settings, to finish as soon as one of the two is reached
-            self.combined_termination_settings = propagation_setup.propagator.hybrid_termination(
-            [termination_max_time_settings, termination_min_altitude_settings], fulfill_single_condition=True)
+            list_terminations_settings = [termination_max_time_settings, termination_min_altitude_settings]
+            if cpu_time_termination is not None:
+                list_terminations_settings.append( cpu_time_termination_settings )
+            if print_progress:
+                list_terminations_settings.append( fake_term_settings )
+            self.combined_termination_settings = propagation_setup.propagator.hybrid_termination(list_terminations_settings, fulfill_single_condition=True)
 
     def create_propagator_settings(self, propagator_type=propagation_setup.propagator.cowell):
         # Create translational propagator settings, using the defined bodies/models
