@@ -11,13 +11,13 @@ while sys.path[0].split("/")[-1] != "MAV_sim":
 
 # Standard imports
 import numpy as np
-from datetime import datetime
 import pygmo as pg
 
 # Tudat imports
 from tudatpy.kernel.numerical_simulation import environment_setup, propagation_setup
 from tudatpy.kernel.astro import element_conversion
 from tudatpy.kernel.interface import spice
+from tudatpy import util
 
 # Custom imports
 from setup.ascent_framework import MAV_ascent, FakeAeroGuidance
@@ -41,7 +41,17 @@ def score_mass(m, m_limit=400):
     else:
         return (5*m_limit-4*m-500)/(m_limit-500)
 
-def MAV_ascent_sim(thrust_angle_1, thrust_angle_2, TVC_angles_y, TVC_angles_z, thrust_model_1, thrust_model_2):
+def MAV_ascent_sim(
+        thrust_angle_1,
+        thrust_angle_2,
+        TVC_angles_y,
+        TVC_angles_z,
+        thrust_model_1,
+        thrust_model_2,
+        return_sim_results=False
+    ):
+    print("Simulating MAV ascent with inputs hash", hash(str(thrust_angle_1)+str(thrust_angle_2)+str(TVC_angles_y)+str(TVC_angles_z)+str(thrust_model_1)+str(thrust_model_2)))
+
     mass_2 = 47.5 + thrust_model_2.M_innert + thrust_model_2.M_p
     mass_1 = 65 + mass_2 + thrust_model_1.M_innert + thrust_model_1.M_p
 
@@ -65,17 +75,18 @@ def MAV_ascent_sim(thrust_angle_1, thrust_angle_2, TVC_angles_y, TVC_angles_z, t
     stage_res = []
     t_b_1, t_b_2 = 0, 0
     for stage in [1, 2]:
-        ascent_model.create_bodies(stage=stage)
-        ascent_model.create_accelerations()
+        ascent_model.create_bodies(stage=stage, add_sun=True, use_new_coeffs=True)
+        ascent_model.create_accelerations(use_cpp=(stage==1), better_precision=True)
         guidance_object = FakeAeroGuidance()
         environment_setup.set_aerodynamic_guidance(guidance_object, ascent_model.current_body, silence_warnings=True)
         ascent_model.create_initial_state()
         ascent_model.create_dependent_variables_to_save(False)
         ascent_model.dependent_variables_to_save.append(propagation_setup.dependent_variable.altitude(ascent_model.current_name, "Mars"))
-        ascent_model.create_termination_settings(end_time=160*60)
+        ascent_model.create_termination_settings(end_time=160*60, cpu_time_termination=30)
         ascent_model.create_propagator_settings()
         ascent_model.create_integrator_settings()
-        times, states, dep_vars = ascent_model.run_simulation()
+        with util.redirect_std():
+            times, states, dep_vars = ascent_model.run_simulation()
         stage_res.append([times, states, dep_vars])
         final_h = max(dep_vars[:,0])
         if stage == 1:
@@ -108,11 +119,19 @@ def MAV_ascent_sim(thrust_angle_1, thrust_angle_2, TVC_angles_y, TVC_angles_z, t
 
     h_peri, h_apo = final_a * (1 - final_e) - R_Mars, final_a * (1 + final_e) - R_Mars
 
-    print("Final: apoapsis = %.2f km / periapsis = %.2f / inclination = %.2f deg with mass = %.2f kg" \
-        % (h_apo/1e3, h_peri/1e3, np.rad2deg(final_i), mass_1))
+    print("Final time %.2f min: apoapsis = %.2f km / periapsis = %.2f / inclination = %.2f deg with mass = %.2f kg" \
+        % (times[-1]/60, h_apo/1e3, h_peri/1e3, np.rad2deg(final_i), mass_1))
 
     altitude_score = score_altitude(h_peri) + score_altitude(h_apo)
     mass_score = score_mass(mass_1)
+
+    # Do some cleanup
+    del(ascent_model)
+    del(thrust_model_1)
+    del(thrust_model_2)
+
+    if return_sim_results:
+        return altitude_score, mass_score, times, states, dep_vars
 
     return altitude_score, mass_score
 

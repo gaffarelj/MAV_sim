@@ -39,6 +39,9 @@ class MAV_thrust:
             self.magnitude_function = self.thrust_model.magnitude_interpolator
             self.m_dot_function = self.thrust_model.m_dot_interpolator
             self.burn_time = self.thrust_model.saved_burn_times[-1]
+            del(self.thrust_model.saved_magnitudes)
+            del(self.thrust_model.saved_burn_times)
+            del(self.thrust_model.saved_m_dot_s)
         else:
             raise NotImplementedError("The thrust model `%s` does not correspond to anything implemented" % type(self.thrust_model))
         
