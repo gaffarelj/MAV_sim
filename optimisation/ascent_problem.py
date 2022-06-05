@@ -15,7 +15,7 @@ import multiprocessing as MP
 
 # Custom imports
 from optimisation.run_ascent import MAV_ascent_sim
-from thrust.solid_thrust import SRM_thrust
+from thrust.solid_thrust_multi_stage import SRM_thrust_rk4 as SRM_thrust
 from thrust.models.spherical import spherical_SRM
 from thrust.models.multi_fin import multi_fin_SRM
 
@@ -60,12 +60,22 @@ class MAV_problem:
             SRM_2_geo_vars = dv[12:14]
             SRM_1_geo_vars = dv[14:]
 
+            # print("launch_angle_1", np.rad2deg(launch_angle_1))
+            # print("launch_angle_2", np.rad2deg(launch_angle_2))
+            # print("TVC_angles_y", np.rad2deg(TVC_angles_y))
+            # print("TVC_angles_z", np.rad2deg(TVC_angles_z))
+            # print("SRM_2_geo_vars", SRM_2_geo_vars)
+            # print("SRM_1_geo_vars", SRM_1_geo_vars)
+
             # Setup SRM model of stage 1
             if self.thrust_geo_model_1 == multi_fin_SRM:
                 L, R_o_1, R_i_frac_1, L_f_frac, w_f_frac, N_f = SRM_1_geo_vars
                 R_i_1 = R_i_frac_1 * R_o_1
                 L_f = L_f_frac * R_i_1
-                w_f = 2*np.pi*(R_i_1-L_f)/N_f*w_f_frac
+                w_f = w_f_frac*2*np.pi*(R_i_1-L_f)/N_f
+                # Make sure that fins will burn before outer tube
+                if w_f/2 > R_o_1 - R_i_1:
+                    w_f = 2*(R_o_1 - R_i_1)-1e-7
                 SRM_1_model = multi_fin_SRM(R_o_1, R_i_1, int(N_f), w_f, L_f, L)
             else:
                 raise NotImplementedError("Only multi-fin SRM is implemented")
@@ -83,7 +93,7 @@ class MAV_problem:
             inputs.append((launch_angle_1, launch_angle_2, TVC_angles_y, TVC_angles_z, SRM_thrust_model_1, SRM_thrust_model_2))
 
         # Get the fitness by running the simulations in parallel
-        with MP.get_context("spawn").Pool(processes=8) as pool:
+        with MP.get_context("spawn").Pool(processes=MP.cpu_count()//2) as pool:
             outputs = pool.starmap(MAV_ascent_sim, inputs)
 
         # Return the 1D list of fitnesses
