@@ -98,7 +98,6 @@ class MAV_ascent:
         body_settings = environment_setup.get_default_body_settings(bodies_to_create, "Mars", "J2000")
         if custom_exponential_model:
             def rho_expo(h):
-
                 if h <= 25e3:
                     rho_0 = 0.0159
                     h_s = 11049
@@ -321,7 +320,7 @@ class MAV_ascent:
 
         termination_abs_max_altitude_settings = propagation_setup.propagator.dependent_variable_termination(
             dependent_variable_settings=propagation_setup.dependent_variable.altitude(self.current_name, "Mars"),
-            limit_value=1000e3,
+            limit_value=5000e3,
             use_as_lower_limit=False)
 
         # For the first stage, terminate at apogee or below a certain altitude
