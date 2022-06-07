@@ -12,6 +12,7 @@ while sys.path[0].split("/")[-1] != "MAV_sim":
 # Standard imports
 import numpy as np
 from scipy.stats import qmc
+import sqlite3
 
 # Custom imports
 from optimisation.ascent_problem import MAV_problem
@@ -19,9 +20,29 @@ from optimisation.ascent_problem import MAV_problem
 # Run only as main  (protect from multiprocessing)
 if __name__ == "__main__":
     # Parameters
-    n_tot = 20
-    n_MC = int(0.35*n_tot)
-    n_Sobol = int(0.65*n_tot)
+    n_tot = int(140/0.7)
+    n_MC = int(0.3*n_tot)
+    n_Sobol = int(0.7*n_tot)
+    reset_table = True
+
+    if reset_table:
+        # Connect to the database
+        con = sqlite3.connect(sys.path[0]+"/optimisation/space_exploration.db")
+        cur = con.cursor()
+        # Delete the table
+        cur.execute("DROP TABLE IF EXISTS solutions_multi_fin")
+        # Create the table
+        req = "CREATE TABLE solutions_multi_fin (id REAL, angle_1 REAL, angle_2 REAL, "
+        req += ", ".join(["TVC_y_%i REAL"%i for i in range(1, 6)])
+        req += ", "
+        req += ", ".join(["TVC_z_%i REAL"%i for i in range(1, 6)])
+        req += ", "
+        req += ", ".join(["spherical_motor_%i REAL"%i for i in range(1, 3)])
+        req += ", "
+        req += ", ".join(["multi_fin_motor_%i REAL"%i for i in range(1, 7)])
+        req += ", h_p_score REAL, h_a_score REAL, mass_score REAL, final_time REAL, h_a REAL, h_p REAL, mass REAL, inclination REAL, t_b_1 REAL, t_b_2 REAL)"
+        cur.execute(req)
+
 
     # Define design variable range
     angle_1_range = [
@@ -70,7 +91,8 @@ if __name__ == "__main__":
     # [Sobol] Populate design variables following a Sobol sequence
     dv_s_Sobol = []
     if n_Sobol > 0:
-        log_n = int(np.ceil(np.log2(n_Sobol)))
+        log_n = int(np.log2(n_Sobol))
+        n_Sobol = 2**log_n
         # Take samples from Sobol sequence
         sampler = qmc.Sobol(d=len(dv_ranges[0]), scramble=True, seed=seed)
         samples = sampler.random_base2(m=log_n) # m=3 means 2^3=8 samples between 0 and 1
@@ -90,6 +112,6 @@ if __name__ == "__main__":
     # Create problem
     from thrust.models.multi_fin import multi_fin_SRM
     problem = MAV_problem(dv_ranges, multi_fin_SRM)
-    print("Running design space exploration with %i inputs (%i MC, %i Sobol)" % (n_MC+n_Sobol, n_MC, n_Sobol))
-    fitnesses = problem.batch_fitness(dv_s)
+    print("Running design space exploration with %i inputs (%i MC, %i Sobol)..." % (n_MC+n_Sobol, n_MC, n_Sobol))
+    fitnesses = problem.batch_fitness(dv_s, plot_results=True, save_to_db=True)
     print(fitnesses)
