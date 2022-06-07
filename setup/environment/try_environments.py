@@ -25,8 +25,8 @@ from thrust.models.spherical import spherical_SRM
 from thrust.solid_thrust_multi_stage import SRM_thrust_rk4 as SRM_thrust
 
 # Parameters
-analyse_gravity = True
-analyse_atmo = False
+analyse_gravity = False
+analyse_atmo = True
 analyse_misc = False
 analyse_other_pm = False
 
@@ -212,20 +212,26 @@ for i_acc in range(n_accs):
     for t, state in zip(times, states):
         if np.fabs(t-t_sep) > 60:
             states_dict[t] = state
-    if base_states is None:
+    if base_states is None and not analyse_atmo:
         base_states = states_dict
         base_label = label_acc
     else:
-        t0, tend = 60, 157*60
-        states_diff_1 = util.compare_results(base_states, states_dict, np.arange(t0, t_sep-90, 0.1))
-        states_diff_2 = util.compare_results(base_states, states_dict, np.arange(t_sep+90, tend, 0.1))
-        states_diff_array_1 = util.result2array(states_diff_1)
-        states_diff_array_2 = util.result2array(states_diff_2)
-        states_diff_array = np.concatenate((states_diff_array_1, states_diff_array_2))
-        diff_times = states_diff_array[:,0]
-        positions_diff = np.linalg.norm(states_diff_array[:,1:4], axis=1)
-        velocity_diff = np.linalg.norm(states_diff_array[:,4:7], axis=1)
-        label = label_acc if base_label == "None" else "%s (vs %s)" % (label_acc, base_label)
+        if not analyse_atmo:
+            t0, tend = 60, 157*60
+            states_diff_1 = util.compare_results(base_states, states_dict, np.arange(t0, t_sep-90, 0.1))
+            states_diff_2 = util.compare_results(base_states, states_dict, np.arange(t_sep+90, tend, 0.1))
+            states_diff_array_1 = util.result2array(states_diff_1)
+            states_diff_array_2 = util.result2array(states_diff_2)
+            states_diff_array = np.concatenate((states_diff_array_1, states_diff_array_2))
+            diff_times = states_diff_array[:,0]
+            positions_diff = np.linalg.norm(states_diff_array[:,1:4], axis=1)
+            velocity_diff = np.linalg.norm(states_diff_array[:,4:7], axis=1)
+            label = label_acc if base_label == "None" else "%s (vs %s)" % (label_acc, base_label)
+        else:
+            diff_times = times
+            positions_diff = np.linalg.norm(states[:,:3]-states[0,:3], axis=1)
+            velocity_diff = np.linalg.norm(states[:,3:]-states[0,3:], axis=1)
+            label = label_acc
         plt.figure(fig1)
         plt.plot(diff_times/60, positions_diff, label=label)
         plt.figure(fig2)
@@ -238,9 +244,10 @@ for i_acc in range(n_accs):
 
 
 plt.figure(fig1)
-xlims = plt.xlim()
-plt.hlines(allowable_errors[0], -1e3, 1e3, colors="orange", linestyles="dashed")
-plt.xlim(xlims)
+if not analyse_atmo:
+    xlims = plt.xlim()
+    plt.hlines(allowable_errors[0], -1e3, 1e3, colors="orange", linestyles="dashed")
+    plt.xlim(xlims)
 plt.xlabel("Time [min]")
 plt.ylabel("$r(t) - r(0)$ [m]")
 plt.title("Position over time")
@@ -251,9 +258,10 @@ plt.tight_layout()
 plt.savefig(sys.path[0]+"/plots/setup/environment/accelerations_%s_position.pdf" % f_name)
 
 plt.figure(fig2)
-xlims = plt.xlim()
-plt.hlines(allowable_errors[1], -1e3, 1e3, colors="orange", linestyles="dashed")
-plt.xlim(xlims)
+if not analyse_atmo:
+    xlims = plt.xlim()
+    plt.hlines(allowable_errors[1], -1e3, 1e3, colors="orange", linestyles="dashed")
+    plt.xlim(xlims)
 plt.xlabel("Time [min]")
 plt.ylabel("$v(t) - v(0)$ [m/s]")
 plt.title("Velocity over time")
