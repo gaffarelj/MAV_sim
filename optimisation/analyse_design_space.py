@@ -74,19 +74,31 @@ if plot_trajectories:
         plt.close()
 
 if analyse_correlation:
-    for dv_used in ["init_angle_only", "TVC_only", "SRM_only"]:#, "all", "*"]:
+    for dv_used in ["init_angle_only", "TVC_only", "SRM_only", "all"]:
         if dv_used == "init_angle_only":
             vars = ["h_a", "h_p", "angle_1", "angle_2"]
+            n_rows = 2
+            figsize = (4,5)
         elif dv_used == "TVC_only":
             vars = ["h_a", "h_p"]
+            n_rows = 2
             [vars.append("TVC_y_%i"%i) for i in range(1,6)]
             [vars.append("TVC_z_%i"%i) for i in range(1,6)]
+            figsize = (9, 3.5)
         elif dv_used == "SRM_only":
             vars = ["h_a", "h_p", "mass"]
+            n_rows = 3
             [vars.append("spherical_motor_%i"%i) for i in range(1,3)]
             [vars.append("multi_fin_motor_%i"%i) for i in range(1,7)]
+            figsize = (8, 5.5)
         else:
-            raise NotImplementedError
+            vars = ["h_a", "h_p", "mass", "angle_1", "angle_2"]
+            [vars.append("TVC_y_%i"%i) for i in range(1,6)]
+            [vars.append("TVC_z_%i"%i) for i in range(1,6)]
+            [vars.append("spherical_motor_%i"%i) for i in range(1,3)]
+            [vars.append("multi_fin_motor_%i"%i) for i in range(1,7)]
+            figsize = (10, 4)
+            n_rows = 3
         # Load entire database into dataframe
         req = "SELECT %s FROM solutions_multi_fin WHERE h_a_score < 1e2 AND h_p_score < 1e2 AND dv_used = '%s'"%(", ".join(vars), dv_used)
         df = pd.read_sql_query(req, con)
@@ -97,10 +109,17 @@ if analyse_correlation:
         # plt.close()
         # Make heatmap
         print("Making heatmap for %s..."%dv_used)
-        # plt.figure(figsize=(25, 25))
-        sns.heatmap(df.corr(), annot=True, fmt=".2f", cmap="vlag")
-        plt.savefig(sys.path[0]+"/plots/optimisation/design_space_exploration_heatmap_%s.pdf"%dv_used)#, dpi=200)
+        correlations = df.corr()
+        # Remove rows and columns that we don't want to compare
+        correlations = correlations[:n_rows]
+        correlations = correlations.iloc[:,n_rows:]
+        plt.figure(figsize=figsize)
+        # Plot heatmap with horizontal colorbar and xticks on top
+        ax = sns.heatmap(correlations, annot=True, fmt=".2f", cmap="vlag", square=True, vmin=-1, vmax=1, cbar_kws={"orientation": "horizontal"})
+        ax.xaxis.tick_top()
+        ax.set_xticklabels(ax.get_xticklabels(), rotation=60)
         plt.tight_layout()
+        plt.savefig(sys.path[0]+"/plots/optimisation/design_space_exploration_heatmap_%s.pdf"%dv_used)
         plt.close()
 
 if get_initial_population:
@@ -139,7 +158,6 @@ if get_initial_population:
     plt.grid()
     plt.tight_layout()
     plt.savefig(sys.path[0]+"/plots/optimisation/initial_population.pdf")
-
 
 # Close the database connection
 con.close()
