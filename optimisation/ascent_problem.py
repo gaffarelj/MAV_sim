@@ -43,14 +43,14 @@ class MAV_problem:
         # Return the fitness for a single decision vector
         return self.batch_fitness(dv)
 
-    def batch_fitness(self, dv_s, plot_results=False, save_to_db=False):
+    def batch_fitness(self, dv_s, save_to_db=None):
         inputs, fitnesses = [], []
 
         # Compute number of design variables
         dv_size = len(self.design_var_range[0])
         n_dvs = len(dv_s)//dv_size
         
-        if save_to_db:
+        if save_to_db is not None:
             # Connect to the database
             con = sqlite3.connect(sys.path[0]+"/optimisation/space_exploration.db")
             cur = con.cursor()
@@ -94,7 +94,7 @@ class MAV_problem:
             SRM_2_model = spherical_SRM(R_o_2, R_i_2)
 
             db_id = None
-            if save_to_db:
+            if save_to_db is not None:
                 # Skip if inputs already in database
                 req = "SELECT id, h_p_score FROM solutions_multi_fin WHERE "
                 req += " AND ".join(["angle_%i = ?"%i for i in range(1,3)])
@@ -135,10 +135,10 @@ class MAV_problem:
                     req += ", ".join(["spherical_motor_%i"%i for i in range(1,3)])
                     req += ", "
                     req += ", ".join(["multi_fin_motor_%i"%i for i in range(1,7)])
-                    req += ") VALUES ("
-                    req += ", ".join(["?" for i in range(21)])
+                    req += ", dv_used) VALUES ("
+                    req += ", ".join(["?" for i in range(22)])
                     req += ")"
-                    cur.execute(req, (db_id,)+tuple(dv))
+                    cur.execute(req, (db_id,)+tuple(dv)+(save_to_db,))
 
             # Set SRM thrust model from geometry models
             SRM_thrust_model_1 = SRM_thrust(SRM_1_model, A_t=0.065, epsilon=45)
@@ -146,42 +146,20 @@ class MAV_problem:
 
             inputs.append((launch_angle_1, launch_angle_2, TVC_angles_y, TVC_angles_z, SRM_thrust_model_1, SRM_thrust_model_2, plot_results, False, db_id))
 
-        if save_to_db:
+        if save_to_db is not None:
             con.commit()
             con.close()
 
         # Get the fitness by running the simulations in parallel
-        with MP.get_context("spawn").Pool(processes=MP.cpu_count()//2) as pool:
+        with MP.get_context("spawn").Pool(processes=50) as pool:#MP.cpu_count()//2) as pool:
             outputs = pool.starmap(MAV_ascent_sim, inputs)
-
-        if plot_results:
-            plt.figure(figsize=(9,5))
 
         # Return the 1D list of fitnesses
         for output in outputs:
-            if plot_results:
-                h_p_score, h_a_score, mass_score, times, states, dep_vars = output
-                altitudes = dep_vars[:,0]
-                plt.plot(times/60, altitudes/1e3, linewidth=0.25, linestyle="dashed")
-            else:
-                h_p_score, h_a_score, mass_score = output
+            h_p_score, h_a_score, mass_score = output
             fitnesses.append(h_p_score)
             fitnesses.append(h_a_score)
             fitnesses.append(mass_score)
-
-        if plot_results:
-            plt.xlabel("Time [min]")
-            plt.ylabel("Altitude [km]")
-            xmin, xmax = plt.xlim()
-            plt.hlines(1e3, -1e3, xmax*1e3, color="black", linestyle="dotted", linewidth=1.0)
-            plt.xlim((xmin, xmax))
-            plt.grid()
-            plt.ylim((-10,5500))
-            plt.xlim((-2,162))
-            plt.yscale("symlog", linthresh=1000, linscale=1.5)
-            plt.yticks([200, 400, 600, 800, 1e3, 3e3, 5e3], ["200", "400", "600", "800", "1 $\cdot 10^3$", "3 $\cdot 10^3$", "5 $\cdot 10^3$"])
-            plt.tight_layout()
-            plt.savefig(sys.path[0]+"/plots/optimisation/design_space_exploration_altitude.pdf")
 
         return fitnesses
 
