@@ -20,10 +20,20 @@ from optimisation.ascent_problem import MAV_problem
 # Run only as main  (protect from multiprocessing)
 if __name__ == "__main__":
     # Parameters
-    n_tot = int(140/0.7)
+    dv_to_use = "SRM_only" # "all", "init_angle_only", "TVC_only", "SRM_only"
+    n_tot = int(14000/0.7)
     n_MC = int(0.3*n_tot)
     n_Sobol = int(0.7*n_tot)
-    reset_table = True
+    reset_table = False
+
+    # Define default values for the design variables
+    default_angle_1 = [np.deg2rad(57.5)]
+    default_angle_2 = [np.deg2rad(90)]
+    default_TVC_y = [0, 0.05, 0.1, 0, 0.05]
+    default_TVC_z = [0, -0.05, 0.0, 0.05, 0.05]
+    default_spherical_geo = [0.165/0.24, 0.0915/0.165]
+    default_multi_fin_geo = [1.05, 0.24, 0.175/0.24, 0.05/0.175, 0.02/(2*np.pi*(0.175-0.05)/20), 20]
+    default_dv = np.concatenate([default_angle_1, default_angle_2, default_TVC_y, default_TVC_z, default_spherical_geo, default_multi_fin_geo])
 
     if reset_table:
         # Connect to the database
@@ -40,9 +50,8 @@ if __name__ == "__main__":
         req += ", ".join(["spherical_motor_%i REAL"%i for i in range(1, 3)])
         req += ", "
         req += ", ".join(["multi_fin_motor_%i REAL"%i for i in range(1, 7)])
-        req += ", h_p_score REAL, h_a_score REAL, mass_score REAL, final_time REAL, h_a REAL, h_p REAL, mass REAL, inclination REAL, t_b_1 REAL, t_b_2 REAL)"
+        req += ", h_p_score REAL, h_a_score REAL, mass_score REAL, final_time REAL, h_a REAL, h_p REAL, mass REAL, inclination REAL, t_b_1 REAL, t_b_2 REAL, dv_used TEXT)"
         cur.execute(req)
-
 
     # Define design variable range
     angle_1_range = [
@@ -81,12 +90,25 @@ if __name__ == "__main__":
     np.random.seed(seed)
     # [MC] Populate design variables at random
     dv_s_MC = []
+    n_dvs = len(dv_ranges[0])
+    i_start = 0
+    if dv_to_use == "init_angle_only":
+        n_dvs = 2
+        i_start = 0
+    elif dv_to_use == "TVC_only":
+        n_dvs = 10
+        i_start = 2
+    elif dv_to_use == "SRM_only":
+        n_dvs = 8
+        i_start = 12
     for i in range(n_MC):
-        for i_dv in range(len(dv_ranges[0])):
-            if i_dv in idx_int_des_var:
-                dv_s_MC.append(np.random.randint(dv_ranges[0][i_dv], dv_ranges[1][i_dv]))
+        dv = default_dv.copy()
+        for i_dv in range(n_dvs):
+            if i_dv+i_start in idx_int_des_var:
+                dv[i_dv+i_start] = np.random.randint(dv_ranges[0][i_dv+i_start], dv_ranges[1][i_dv+i_start])
             else:
-                dv_s_MC.append(np.random.uniform(dv_ranges[0][i_dv], dv_ranges[1][i_dv]))
+                dv[i_dv+i_start] = np.random.uniform(dv_ranges[0][i_dv+i_start], dv_ranges[1][i_dv+i_start])
+        dv_s_MC.extend(dv)
 
     # [Sobol] Populate design variables following a Sobol sequence
     dv_s_Sobol = []
@@ -100,11 +122,13 @@ if __name__ == "__main__":
         # x_sobol = x_lims[0] + samples[:, 0] * (x_lims[1] - x_lims[0])
         # y_sobol = y_lims[0] + samples[:, 1] * (y_lims[1] - y_lims[0])
         for i in range(2**log_n):
-            for i_dv in range(len(dv_ranges[0])):
-                val = dv_ranges[0][i_dv] + samples[i, i_dv] * (dv_ranges[1][i_dv] - dv_ranges[0][i_dv])
-                if i_dv in idx_int_des_var:
+            dv = default_dv.copy()
+            for i_dv in range(n_dvs):
+                val = dv_ranges[0][i_dv+i_start] + samples[i, i_dv+i_start] * (dv_ranges[1][i_dv+i_start] - dv_ranges[0][i_dv+i_start])
+                if i_dv+i_start in idx_int_des_var:
                     val = int(val)
-                dv_s_Sobol.append(val)
+                dv[i_dv+i_start] = val
+            dv_s_Sobol.extend(dv)
 
     # Combine design variables from MC and Sobol
     dv_s = dv_s_MC + dv_s_Sobol
@@ -113,5 +137,5 @@ if __name__ == "__main__":
     from thrust.models.multi_fin import multi_fin_SRM
     problem = MAV_problem(dv_ranges, multi_fin_SRM)
     print("Running design space exploration with %i inputs (%i MC, %i Sobol)..." % (n_MC+n_Sobol, n_MC, n_Sobol))
-    fitnesses = problem.batch_fitness(dv_s, plot_results=True, save_to_db=True)
+    fitnesses = problem.batch_fitness(dv_s, plot_results=True, save_to_db=dv_to_use)
     print(fitnesses)
