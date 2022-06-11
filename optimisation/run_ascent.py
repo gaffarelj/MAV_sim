@@ -51,7 +51,6 @@ def MAV_ascent_sim(
         TVC_angles_z,
         thrust_model_1,
         thrust_model_2,
-        return_sim_results=False,
         print_times=False,
         save_to_db=None
     ):
@@ -149,7 +148,7 @@ def MAV_ascent_sim(
         % (times[-1]/60, h_apo/1e3, h_peri/1e3, np.rad2deg(final_i), mass_1, add_print))
 
     # Resample results
-    if return_sim_results:
+    if save_to_db is not None:
         if len(times) > 50:
             times_resampled_1 = np.linspace(0, t_sep, num=1030)[:-30]
             times_resampled_2 = np.linspace(t_sep, times[-1], num=1030)[30:]
@@ -191,20 +190,17 @@ def MAV_ascent_sim(
     del(thrust_model_1)
     del(thrust_model_2)
 
-    if return_sim_results:
-        return h_p_score, h_a_score, mass_score, times_resampled, None, dep_vars_resampled
-
     return h_p_score, h_a_score, mass_score
 
 if __name__ == "__main__":
     # Parameters
     seed = 42
-    pop_size = 8*3*3
+    pop_size = 8*9
     n_generations = 5
 
     # Define the range in which the design variables can vary
-    launch_angle_1_range = np.deg2rad([30, 60])
-    launch_angle_2_range = np.deg2rad([60, 120])
+    launch_angle_1_range = np.deg2rad([47.5, 60])
+    launch_angle_2_range = np.deg2rad([70, 110])
     TVC_range = np.deg2rad([-5, 5])
     N_TVC_nodes = 5
     spherical_SRM_range = [[0.3, 0.2], [1.0, 0.9]]
@@ -219,11 +215,36 @@ if __name__ == "__main__":
     problem = pg.problem(ascent_problem)
 
     # Initialise a Pygmo population
-    pop = pg.population(problem, size=pop_size-1, seed=seed, b=pg.default_bfe())
-    # Add a good initial guess to the population
-    pop.push_back(
-        x=[np.deg2rad(57.5), np.deg2rad(90), 0, 0.05, 0.1, 0, 0.05, 0, -0.05, 0.0, 0.05, 0.05, 0.6875, 0.0915/0.165, 1.05, 0.24, 0.175/0.24, 0.05/0.175, 0.02/(2*np.pi*(0.175-0.05)/20), 20],
-        f=[0.141629, 0.413005, 0.968139])
+    pop = pg.population(problem, size=0, seed=seed, b=pg.default_bfe())
+
+    # Connect to database
+    con = sqlite3.connect(sys.path[0]+"/optimisation/space_exploration.db")
+    cur = con.cursor()
+
+    # Set best results from design space exploration as initial population
+    samples_weights = {
+        "init_angle_only": 2,
+        "TVC_only": 1,
+        "SRM_only": 3,
+        "all": 1
+    }
+    sum_weights = sum(samples_weights.values())
+    samples_weights = {k: v/sum_weights for k, v in samples_weights.items()}
+    ids = []
+    for dv_used, fraction in samples_weights.items():
+        sim_num = int(pop_size*fraction)
+        if dv_used == "all":
+            sim_num = pop_size - len(ids)
+        req = "SELECT * FROM solutions_multi_fin WHERE dv_used = '%s' ORDER BY h_a_score+h_p_score+mass_score ASC LIMIT %i"%(dv_used, sim_num)
+        cur.execute(req)
+        res = cur.fetchall()
+        [ids.append(row[0]) for row in res]
+        for row in res:
+            # Add to population
+            pop.push_back(
+                x=row[1:21],
+                f=row[21:24])
+    con.close()
     
     # Select the optimisation algorithm
     # BFE: GACO, MACO, NSGA2, NSPSO, PSO_GEN
