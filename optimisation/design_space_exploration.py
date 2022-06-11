@@ -55,12 +55,12 @@ if __name__ == "__main__":
 
     # Define design variable range
     angle_1_range = [
-        [np.deg2rad(30)],
+        [np.deg2rad(30)],   # -> [np.deg2rad(47.5)]
         [np.deg2rad(60)]
     ]
     angle_2_range = [
-        [np.deg2rad(60)],
-        [np.deg2rad(120)]
+        [np.deg2rad(60)],   # -> [np.deg2rad(70)]
+        [np.deg2rad(120)]   # -> [np.deg2rad(110)]
     ]
     TVC_y_range = [
         [np.deg2rad(-5)]*5,
