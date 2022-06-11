@@ -34,10 +34,12 @@ if plot_trajectories:
     for dv_used in ["all", "init_angle_only", "TVC_only", "SRM_only", "*"]:
         if dv_used == "*":
             req = "SELECT id FROM solutions_multi_fin"
-            line_thickness = 0.15
+            line_thickness = 0.05
+            alpha = 0.5
         else:
             req = "SELECT id FROM solutions_multi_fin WHERE h_a > 200e3 AND h_p > 200e3 AND h_a < 500e3 AND h_p < 500e3 AND dv_used = '%s'"%dv_used
             line_thickness = 0.5
+            alpha = 1.0
         cur.execute(req)
         ids = [i[0] for i in cur.fetchall()]
         # Plot trajectories
@@ -49,9 +51,9 @@ if plot_trajectories:
             sim_results = np.load(sys.path[0]+"/optimisation/sim_results/%i.npz"%id)
             times = sim_results["times"]
             altitudes = sim_results["dep_vars"][:,0]
-            plt.plot(times[:1000]/60, altitudes[:1000]/1e3, linewidth=line_thickness, color="C%i"%(i+1))
-            plt.plot(times[1001:]/60, altitudes[1001:]/1e3, linewidth=line_thickness, color="C%i"%(i+1))
-            plt.plot(times[998:1002]/60, altitudes[998:1002]/1e3, linewidth=line_thickness, linestyle="dashed", color="C%i"%(i+1))
+            plt.plot(times[:1000]/60, altitudes[:1000]/1e3, linewidth=line_thickness, color="C%i"%(i+1), alpha=alpha)
+            plt.plot(times[1001:]/60, altitudes[1001:]/1e3, linewidth=line_thickness, color="C%i"%(i+1), alpha=alpha)
+            plt.plot(times[998:1002]/60, altitudes[998:1002]/1e3, linewidth=line_thickness, linestyle="dashed", color="C%i"%(i+1), alpha=alpha)
         print("Plotted %i trajectories for %s                     "%(len(ids), dv_used))
         # Prettify plot
         plt.xlabel("Time [min]")
@@ -68,9 +70,11 @@ if plot_trajectories:
         plt.grid()
         plt.tight_layout()
         if dv_used == "*":
-            plt.savefig(sys.path[0]+"/plots/optimisation/design_space_exploration_altitude.pdf")
+            plt.savefig(sys.path[0]+"/plots/optimisation/design_space_exploration/altitude.pdf")
+            # plt.axis('off')
+            # plt.savefig(sys.path[0]+"/plots/optimisation/design_space_exploration/altitude", transparent=True, dpi=350)
         else:
-            plt.savefig(sys.path[0]+"/plots/optimisation/design_space_exploration_altitude_%s_sampled.pdf"%dv_used)
+            plt.savefig(sys.path[0]+"/plots/optimisation/design_space_exploration/altitude_%s_sampled.pdf"%dv_used)
         plt.close()
 
 if analyse_correlation:
@@ -80,33 +84,42 @@ if analyse_correlation:
             n_rows = 2
             figsize = (4,5)
         elif dv_used == "TVC_only":
-            vars = ["h_a", "h_p"]
-            n_rows = 2
+            vars = ["h_a", "h_p", "inclination"]
+            n_rows = 3
             [vars.append("TVC_y_%i"%i) for i in range(1,6)]
             [vars.append("TVC_z_%i"%i) for i in range(1,6)]
-            figsize = (9, 3.5)
+            figsize = (9, 4.5)
         elif dv_used == "SRM_only":
             vars = ["h_a", "h_p", "mass"]
             n_rows = 3
             [vars.append("spherical_motor_%i"%i) for i in range(1,3)]
             [vars.append("multi_fin_motor_%i"%i) for i in range(1,7)]
-            figsize = (8, 5.5)
+            figsize = (8, 6)
         else:
             vars = ["h_a", "h_p", "mass", "angle_1", "angle_2"]
             [vars.append("TVC_y_%i"%i) for i in range(1,6)]
             [vars.append("TVC_z_%i"%i) for i in range(1,6)]
             [vars.append("spherical_motor_%i"%i) for i in range(1,3)]
             [vars.append("multi_fin_motor_%i"%i) for i in range(1,7)]
-            figsize = (10, 4)
+            figsize = (10, 5)
             n_rows = 3
+        replace_keys = {
+            "spherical_motor_1": "spherical_motor R_o",
+            "spherical_motor_2": "spherical_motor R_i",
+            "multi_fin_motor_1": "multi_fin_motor L",
+            "multi_fin_motor_2": "multi_fin_motor R_o",
+            "multi_fin_motor_3": "multi_fin_motor R_i",
+            "multi_fin_motor_4": "multi_fin_motor L_f",
+            "multi_fin_motor_5": "multi_fin_motor w_f",
+            "multi_fin_motor_6": "multi_fin_motor N_f"
+        }
+    
+
         # Load entire database into dataframe
         req = "SELECT %s FROM solutions_multi_fin WHERE h_a_score < 1e2 AND h_p_score < 1e2 AND dv_used = '%s'"%(", ".join(vars), dv_used)
         df = pd.read_sql_query(req, con)
-        # # Make pairplot
-        # print("Making pairplots for %s..."%dv_used)
-        # sns.pairplot(df, kind="kde")
-        # plt.savefig(sys.path[0]+"/plots/optimisation/design_space_exploration_pairplot_%s.pdf"%dv_used)#, dpi=200)
-        # plt.close()
+        # Replace dataframe column names
+        df.columns = [replace_keys.get(c, c) for c in df.columns]
         # Make heatmap
         print("Making heatmap for %s..."%dv_used)
         correlations = df.corr()
@@ -117,10 +130,65 @@ if analyse_correlation:
         # Plot heatmap with horizontal colorbar and xticks on top
         ax = sns.heatmap(correlations, annot=True, fmt=".2f", cmap="vlag", square=True, vmin=-1, vmax=1, cbar_kws={"orientation": "horizontal"})
         ax.xaxis.tick_top()
-        ax.set_xticklabels(ax.get_xticklabels(), rotation=60)
-        plt.tight_layout()
-        plt.savefig(sys.path[0]+"/plots/optimisation/design_space_exploration_heatmap_%s.pdf"%dv_used)
+        ax.set_xticklabels(ax.get_xticklabels(), rotation=77.5)
+        plt.savefig(sys.path[0]+"/plots/optimisation/design_space_exploration/heatmap_%s.pdf"%dv_used)
         plt.close()
+
+        objectives = ["h_p_score+h_a_score"]
+        vars = []
+        treshold = 20
+        if dv_used in ["init_angle_only", "TVC_only"]:
+            operator = np.rad2deg
+            if dv_used == "TVC_only":
+                [vars.append("TVC_z_%i"%i) for i in range(1,6)]
+                units = ["deg"]*5
+            else:
+                vars = ["angle_1", "angle_2"]
+                units = ["deg"]*2
+        elif dv_used == "SRM_only":
+            treshold = 20
+            objectives = ["h_p_score+h_a_score", "mass_score"]
+            operator = lambda x:x
+            units = ["-", "-", "m", "m", "-", "-", "-", "-"]
+            [vars.append("spherical_motor_%i"%i) for i in range(1,3)]
+            [vars.append("multi_fin_motor_%i"%i) for i in range(1,4)]
+        else:
+            continue
+
+        # Load entire database into dataframe
+        req = "SELECT %s, %s FROM solutions_multi_fin WHERE h_a_score < 1e2 AND h_p_score < 1e2 AND dv_used = '%s'"%(", ".join(objectives), ", ".join(vars), dv_used)
+        # if dv_used == "SRM_only":
+        #     req = "SELECT %s, %s FROM solutions_multi_fin WHERE h_a_score < 1e2 AND h_p_score < 1e2 AND dv_used = '%s'"%(", ".join(objectives), ", ".join(vars), dv_used)
+        df = pd.read_sql_query(req, con)
+        # Extract objective columns
+        df_objectives = df[objectives]
+        # Replace dataframe column names
+        df.columns = [replace_keys.get(c, c) for c in df.columns]
+        # Replace name in vars
+        vars = [replace_keys.get(c, c) for c in vars]
+        # Plot objective score vs design variables
+        print("Plotting objective score vs design variables for %s..."%dv_used)
+        for objective in objectives:
+            plt.figure(figsize=(9, 5))
+            for i, var in enumerate(vars):
+                f = 10 if "N_f" in var else 1
+                # Index of objectives below treshold
+                idx = df_objectives[objective] <= treshold
+                # Variables of objectives below treshold
+                x = operator(df[var][idx])
+                # Maximum and minimum variable value
+                x_max, x_min = np.max(x), np.min(x)
+                print("For %s below treshold, %s has range %.2f to %.2f" % (objective, var, x_min, x_max))
+                plt.plot(operator(df[var])/f, df_objectives[objective], "o", label="%s [%s]"%("%s/%i"%(var, f) if f != 1 else var, units[i]), markersize=1.5, alpha=0.5)
+            plt.grid()
+            plt.legend()
+            plt.yscale("log")
+            plt.xlabel("Design variable value")
+            ylims = plt.ylim()
+            plt.ylim((1e-1, ylims[1]))
+            plt.ylabel(objective)
+            plt.tight_layout()
+            plt.savefig(sys.path[0]+"/plots/optimisation/design_space_exploration/%s_vs_%s_dvs.pdf"%(objective, dv_used))
 
 if get_initial_population:
     N = 48
