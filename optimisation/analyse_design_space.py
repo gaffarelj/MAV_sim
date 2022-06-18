@@ -1,7 +1,3 @@
-# TODO:
-# Plot score vs each (set of) design variables
-# Plot Pareto fronts (vs relevant design variables)
-
 import sys, os
 # Add tudatpy path
 if "cala" in os.getcwd():
@@ -24,6 +20,10 @@ import seaborn as sns
 plot_trajectories = False
 analyse_correlation = False
 get_initial_population = False
+pareto_fronts = True
+
+# Tudatpy imports
+from tudatpy import plotting
 
 
 # Connect to database
@@ -113,7 +113,7 @@ if analyse_correlation:
             "multi_fin_motor_5": "multi_fin_motor w_f",
             "multi_fin_motor_6": "multi_fin_motor N_f"
         }
-    
+
 
         # Load entire database into dataframe
         req = "SELECT %s FROM solutions_multi_fin WHERE h_a_score < 1e2 AND h_p_score < 1e2 AND dv_used = '%s'"%(", ".join(vars), dv_used)
@@ -226,6 +226,57 @@ if get_initial_population:
     plt.grid()
     plt.tight_layout()
     plt.savefig(sys.path[0]+"/plots/optimisation/initial_population.pdf")
+
+if pareto_fronts:
+    for dv_used in ["init_angle_only", "TVC_only", "SRM_only", "all", "*"]:
+        print("Plotting pareto front for %s..."%dv_used)
+        # Load entire database into dataframe
+        if dv_used == "*":
+            fname = "Pareto.pdf"
+            req_a = "SELECT h_a_score+h_p_score, * FROM solutions_multi_fin WHERE h_a_score < 15 AND h_p_score < 15"
+            req_b = "SELECT * FROM solutions_multi_fin WHERE h_a_score < 25 AND h_p_score < 25 AND mass_score < 25"
+        else:
+            fname = "Pareto_%s.pdf" % dv_used
+            req_a = "SELECT h_a_score+h_p_score, * FROM solutions_multi_fin WHERE h_a_score < 15 AND h_p_score < 15 AND dv_used = '%s' ORDER BY h_a_score+h_p_score+10*mass_score ASC LIMIT 400" % dv_used
+            req_b = "SELECT * FROM solutions_multi_fin WHERE h_a_score < 15 AND h_p_score < 15 AND mass_score < 15 AND dv_used = '%s'" % dv_used
+        df = pd.read_sql_query(req_a, con)
+        plt.figure(figsize=(9, 5))
+        # Plot pareto front
+        if dv_used in ["init_angle_only", "TVC_only"]:
+            fig, ax = plotting.pareto_front(
+                x_objective=df["h_a_score"],
+                y_objective=df["h_p_score"],
+                x_label="Apoapsis altitude score",
+                y_label="Periapsis altitude score",
+                alpha=0.65
+            )
+        else:
+            fig, ax = plotting.pareto_front(
+                x_objective=df["h_a_score"],
+                y_objective=df["h_p_score"],
+                x_label="Apoapsis altitude score",
+                y_label="Periapsis altitude score",
+                c_parameter=df["mass_score"],
+                c_label="Mass score",
+                cmap="viridis",
+                alpha=0.65
+            )
+        # Save the plot
+        plt.savefig(sys.path[0]+"/plots/optimisation/design_space_exploration/"+fname)
+        # Plot all objectives against each other in 3D
+        print("Plotting pareto front in 3D for %s..."%dv_used)
+        df = pd.read_sql_query(req_b, con)
+        fig = plt.figure(figsize=(7, 5))
+        ax = fig.add_subplot(111, projection="3d")
+        r = ax.scatter(df["h_a_score"], df["h_p_score"], df["mass_score"], alpha=0.45, s=1.2, c=df["mass_score"], cmap="jet")
+        # Add colormap
+        cbar = fig.colorbar(r, ax=ax, shrink=0.6, pad=0.1)
+        cbar.set_label("Mass score")
+        ax.set_xlabel("Periapsis altitude score")
+        ax.set_ylabel("Apoapsis altitude score")
+        ax.set_zlabel("Mass score")
+        plt.tight_layout()
+        plt.savefig(sys.path[0]+"/plots/optimisation/design_space_exploration/"+fname.replace(".", "_3D."))
 
 # Close the database connection
 con.close()
