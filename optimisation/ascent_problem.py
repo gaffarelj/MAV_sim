@@ -23,9 +23,11 @@ from thrust.models.multi_fin import multi_fin_SRM
 
 class MAV_problem:
 
-    def __init__(self, design_var_range, thrust_geo_model_1):
+    def __init__(self, design_var_range, thrust_geo_model_1, save_to_db=None):
         self.design_var_range = design_var_range
         self.thrust_geo_model_1 = thrust_geo_model_1 # (geo model for stage 2 is always spherical)
+        self.save_to_db = save_to_db
+        self.i_gen = None
 
     def get_bounds(self):
         return self.design_var_range
@@ -45,6 +47,16 @@ class MAV_problem:
 
     def batch_fitness(self, dv_s, save_to_db=None):
         inputs, fitnesses = [], []
+        if self.i_gen is None:
+            self.i_gen = 0
+        else:
+            self.i_gen += 1
+
+        if save_to_db is None:
+            save_to_db = self.save_to_db
+
+        if "~N~" in save_to_db:
+            save_to_db = save_to_db.replace("~N~", str(self.i_gen))
 
         # Compute number of design variables
         dv_size = len(self.design_var_range[0])
@@ -56,6 +68,7 @@ class MAV_problem:
             cur = con.cursor()
         
         # Loop trough the design variables
+        i_exist, scores_exist = [], []
         for dv_i in range(n_dvs):
             dv = dv_s[dv_i*dv_size:(dv_i+1)*dv_size]
 
@@ -96,7 +109,7 @@ class MAV_problem:
             db_id = None
             if save_to_db is not None:
                 # Skip if inputs already in database
-                req = "SELECT id, h_p_score FROM solutions_multi_fin WHERE "
+                req = "SELECT id, h_p_score, h_a_score, mass_score, dv_used FROM solutions_multi_fin WHERE "
                 req += " AND ".join(["angle_%i = ?"%i for i in range(1,3)])
                 req += " AND "
                 req += " AND ".join(["TVC_y_%i = ?"%i for i in range(1,6)])
@@ -110,11 +123,30 @@ class MAV_problem:
                 res = cur.fetchall()
                 # If results exist...
                 if len(res) > 0:
-                    db_h_p_score = res[0][1]
                     db_id = res[0][0]
+                    db_h_p_score = res[0][1]
+                    db_h_a_score = res[0][2]
+                    db_mass_score = res[0][3]
+                    db_dv_used = res[0][4]
                     # Check if score was already computed...
                     if db_h_p_score is not None:
-                        print("Skipping already existing solution with id", db_id)
+                        print("Skipping DV %i; solution exists with id %i" % (dv_i, db_id))
+                        i_exist.append(dv_i)
+                        scores_exist.append([db_h_p_score, db_h_a_score, db_mass_score])
+                        # Check that these scores are not yet associated with a database entry with the same dv_used
+                        req = "SELECT id FROM solutions_multi_fin WHERE h_p_score = ? AND h_a_score = ? AND mass_score = ? AND dv_used = ?"
+                        cur.execute(req, [db_h_p_score, db_h_a_score, db_mass_score, save_to_db])
+                        res = cur.fetchall()
+                        # Save in db as if sim was run
+                        if len(res) == 0:
+                            highest_id = cur.execute("SELECT MAX(id) FROM solutions_multi_fin").fetchone()[0]
+                            if highest_id is None:
+                                db_id = 1
+                            else:
+                                db_id = highest_id + 1
+                            # Save the design variables to the database
+                            req = "INSERT INTO solutions_multi_fin (id, h_p_score, h_a_score, mass_score, dv_used) VALUES (?, ?, ?, ?, ?)"
+                            cur.execute(req, (db_id, db_h_p_score, db_h_a_score, db_mass_score, save_to_db))
                         continue
                 # Otherwise, add inputs to database
                 else:
@@ -155,8 +187,11 @@ class MAV_problem:
             outputs = pool.starmap(MAV_ascent_sim, inputs)
 
         # Return the 1D list of fitnesses
-        for output in outputs:
-            h_p_score, h_a_score, mass_score = output
+        for i_res in range(n_dvs):
+            if i_res in i_exist:
+                h_p_score, h_a_score, mass_score = scores_exist.pop(0)
+            else:
+                h_p_score, h_a_score, mass_score = outputs.pop(0)
             fitnesses.append(h_p_score)
             fitnesses.append(h_a_score)
             fitnesses.append(mass_score)
