@@ -52,7 +52,7 @@ class MAV_problem:
         
         if save_to_db is not None:
             # Connect to the database
-            con = sqlite3.connect(sys.path[0]+"/optimisation/space_exploration.db")
+            con = sqlite3.connect(sys.path[0]+"/optimisation/design_space.db")
             cur = con.cursor()
         
         # Loop trough the design variables

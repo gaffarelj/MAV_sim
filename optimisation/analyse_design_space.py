@@ -27,7 +27,7 @@ from tudatpy import plotting
 
 
 # Connect to database
-con = sqlite3.connect(sys.path[0]+"/optimisation/space_exploration.db")
+con = sqlite3.connect(sys.path[0]+"/optimisation/design_space.db")
 cur = con.cursor()
 
 if plot_trajectories:

@@ -37,7 +37,7 @@ if __name__ == "__main__":
 
     if reset_table:
         # Connect to the database
-        con = sqlite3.connect(sys.path[0]+"/optimisation/space_exploration.db")
+        con = sqlite3.connect(sys.path[0]+"/optimisation/design_space.db")
         cur = con.cursor()
         # Delete the table
         cur.execute("DROP TABLE IF EXISTS solutions_multi_fin")
