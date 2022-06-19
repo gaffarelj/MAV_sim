@@ -213,10 +213,10 @@ if __name__ == "__main__":
         TVC_range = np.deg2rad([-5, 5])
         N_TVC_nodes = 5
         spherical_SRM_range = [[0.3, 0.2], [1.0, 0.9]]
-        multi_fin_SRM_range = [[0.3, 0.1, 0.2, 0.25, 0.35, 3], [1.25, 0.285, 0.9, 0.75, 0.9, 15]]
+        multi_fin_SRM_range = [[0.3, 0.1, 0.2, 0.25, 0.35, 3], [1.25, 0.285, 0.9, 0.75, 0.9, 20]]
         design_var_range = (
-            [launch_angle_1_range[0], launch_angle_2_range[0], *[TVC_range[0]]*N_TVC_nodes*2, *spherical_SRM_range[0], *multi_fin_SRM_range[0]],
-            [launch_angle_1_range[1], launch_angle_2_range[1], *[TVC_range[1]]*N_TVC_nodes*2, *spherical_SRM_range[1], *multi_fin_SRM_range[1]]
+            [launch_angle_1_range[0], launch_angle_2_range[0], *[TVC_range[0]]*N_TVC_nodes, *spherical_SRM_range[0], *multi_fin_SRM_range[0]],
+            [launch_angle_1_range[1], launch_angle_2_range[1], *[TVC_range[1]]*N_TVC_nodes, *spherical_SRM_range[1], *multi_fin_SRM_range[1]]
         )
 
         # Define the optimisation problem
@@ -266,7 +266,7 @@ if __name__ == "__main__":
             for row in res:
                 # Add to population
                 pop.push_back(
-                    x=row[1:21],
+                    x=row[1:3]+row[8:21],
                     f=row[21:24])
         con.close()
 

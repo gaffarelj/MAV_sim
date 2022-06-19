@@ -75,10 +75,10 @@ class MAV_problem:
             # Extract data from the design variables:
             launch_angle_1 = dv[0]
             launch_angle_2 = dv[1]
-            TVC_angles_y = list(dv[2:7])
-            TVC_angles_z = list(dv[7:12])
-            SRM_2_geo_vars = dv[12:14]
-            SRM_1_geo_vars = dv[14:]
+            # TVC_angles_y = list(dv[2:7])
+            TVC_angles_z = list(dv[2:7])
+            SRM_2_geo_vars = dv[7:9]
+            SRM_1_geo_vars = dv[9:]
 
             # print("launch_angle_1", np.rad2deg(launch_angle_1))
             # print("launch_angle_2", np.rad2deg(launch_angle_2))
@@ -111,8 +111,8 @@ class MAV_problem:
                 # Skip if inputs already in database
                 req = "SELECT id, h_p_score, h_a_score, mass_score, dv_used FROM solutions_multi_fin WHERE "
                 req += " AND ".join(["angle_%i = ?"%i for i in range(1,3)])
-                req += " AND "
-                req += " AND ".join(["TVC_y_%i = ?"%i for i in range(1,6)])
+                # req += " AND "
+                # req += " AND ".join(["TVC_y_%i = ?"%i for i in range(1,6)])
                 req += " AND "
                 req += " AND ".join(["TVC_z_%i = ?"%i for i in range(1,6)])
                 req += " AND "
@@ -159,8 +159,8 @@ class MAV_problem:
                     # Save the design variables to the database
                     req = "INSERT INTO solutions_multi_fin (id, "
                     req += ", ".join(["angle_%i"%i for i in range(1,3)])
-                    req += ", "
-                    req += ", ".join(["TVC_y_%i"%i for i in range(1,6)])
+                    # req += ", "
+                    # req += ", ".join(["TVC_y_%i"%i for i in range(1,6)])
                     req += ", "
                     req += ", ".join(["TVC_z_%i"%i for i in range(1,6)])
                     req += ", "
@@ -168,7 +168,7 @@ class MAV_problem:
                     req += ", "
                     req += ", ".join(["multi_fin_motor_%i"%i for i in range(1,7)])
                     req += ", dv_used) VALUES ("
-                    req += ", ".join(["?" for i in range(22)])
+                    req += ", ".join(["?" for i in range(22-5)])
                     req += ")"
                     cur.execute(req, (db_id,)+tuple(dv)+(save_to_db,))
 
@@ -176,7 +176,8 @@ class MAV_problem:
             SRM_thrust_model_1 = SRM_thrust(SRM_1_model, A_t=0.065, epsilon=45)
             SRM_thrust_model_2 = SRM_thrust(SRM_2_model, A_t=0.005, epsilon=73, p_a=0)
 
-            inputs.append((launch_angle_1, launch_angle_2, TVC_angles_y, TVC_angles_z, SRM_thrust_model_1, SRM_thrust_model_2, False, db_id))
+            # inputs.append((launch_angle_1, launch_angle_2, TVC_angles_y, TVC_angles_z, SRM_thrust_model_1, SRM_thrust_model_2, False, db_id))
+            inputs.append((launch_angle_1, launch_angle_2, 0, TVC_angles_z, SRM_thrust_model_1, SRM_thrust_model_2, False, db_id))
 
         if save_to_db is not None:
             con.commit()
