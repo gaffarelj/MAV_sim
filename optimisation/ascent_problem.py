@@ -55,17 +55,16 @@ class MAV_problem:
         if save_to_db is None:
             save_to_db = self.save_to_db
 
-        if "~N~" in save_to_db:
+        if save_to_db is not None and "~N~" in save_to_db:
             save_to_db = save_to_db.replace("~N~", str(self.i_gen))
 
         # Compute number of design variables
         dv_size = len(self.design_var_range[0])
         n_dvs = len(dv_s)//dv_size
         
-        if save_to_db is not None:
-            # Connect to the database
-            con = sqlite3.connect(sys.path[0]+"/optimisation/design_space.db")
-            cur = con.cursor()
+        # Connect to the database
+        con = sqlite3.connect(sys.path[0]+"/optimisation/design_space.db")
+        cur = con.cursor()
         
         # Loop trough the design variables
         i_exist, scores_exist = [], []
@@ -107,32 +106,32 @@ class MAV_problem:
             SRM_2_model = spherical_SRM(R_o_2, R_i_2)
 
             db_id = None
-            if save_to_db is not None:
-                # Skip if inputs already in database
-                req = "SELECT id, h_p_score, h_a_score, mass_score, dv_used FROM solutions_multi_fin WHERE "
-                req += " AND ".join(["angle_%i = ?"%i for i in range(1,3)])
-                # req += " AND "
-                # req += " AND ".join(["TVC_y_%i = ?"%i for i in range(1,6)])
-                req += " AND "
-                req += " AND ".join(["TVC_z_%i = ?"%i for i in range(1,6)])
-                req += " AND "
-                req += " AND ".join(["spherical_motor_%i = ?"%i for i in range(1,3)])
-                req += " AND "
-                req += " AND ".join(["multi_fin_motor_%i = ?"%i for i in range(1,7)])
-                cur.execute(req, dv)
-                res = cur.fetchall()
-                # If results exist...
-                if len(res) > 0:
-                    db_id = res[0][0]
-                    db_h_p_score = res[0][1]
-                    db_h_a_score = res[0][2]
-                    db_mass_score = res[0][3]
-                    db_dv_used = res[0][4]
-                    # Check if score was already computed...
-                    if db_h_p_score is not None:
-                        print("Skipping DV %i; solution exists with id %i" % (dv_i, db_id))
-                        i_exist.append(dv_i)
-                        scores_exist.append([db_h_p_score, db_h_a_score, db_mass_score])
+            # Skip if inputs already in database
+            req = "SELECT id, h_p_score, h_a_score, mass_score, dv_used FROM solutions_multi_fin WHERE "
+            req += " AND ".join(["angle_%i = ?"%i for i in range(1,3)])
+            # req += " AND "
+            # req += " AND ".join(["TVC_y_%i = ?"%i for i in range(1,6)])
+            req += " AND "
+            req += " AND ".join(["TVC_z_%i = ?"%i for i in range(1,6)])
+            req += " AND "
+            req += " AND ".join(["spherical_motor_%i = ?"%i for i in range(1,3)])
+            req += " AND "
+            req += " AND ".join(["multi_fin_motor_%i = ?"%i for i in range(1,7)])
+            cur.execute(req, dv)
+            res = cur.fetchall()
+            # If results exist...
+            if len(res) > 0:
+                db_id = res[0][0]
+                db_h_p_score = res[0][1]
+                db_h_a_score = res[0][2]
+                db_mass_score = res[0][3]
+                # Check if score was already computed...
+                if db_h_p_score is not None:
+                    print("Skipping DV %i; solution exists with id %i" % (dv_i, db_id))
+                    i_exist.append(dv_i)
+                    scores_exist.append([db_h_p_score, db_h_a_score, db_mass_score])
+
+                    if save_to_db is not None:
                         # Check that these scores are not yet associated with a database entry with the same dv_used
                         req = "SELECT id FROM solutions_multi_fin WHERE h_p_score = ? AND h_a_score = ? AND mass_score = ? AND dv_used = ?"
                         cur.execute(req, [db_h_p_score, db_h_a_score, db_mass_score, save_to_db])
@@ -147,30 +146,30 @@ class MAV_problem:
                             # Save the design variables to the database
                             req = "INSERT INTO solutions_multi_fin (id, h_p_score, h_a_score, mass_score, dv_used) VALUES (?, ?, ?, ?, ?)"
                             cur.execute(req, (db_id, db_h_p_score, db_h_a_score, db_mass_score, save_to_db))
-                        continue
-                # Otherwise, add inputs to database
+                    continue
+            # Otherwise, add inputs to database
+            elif save_to_db is not None:
+                # Set inputs id as latest one + 1
+                highest_id = cur.execute("SELECT MAX(id) FROM solutions_multi_fin").fetchone()[0]
+                if highest_id is None:
+                    db_id = 1
                 else:
-                    # Set inputs id as latest one + 1
-                    highest_id = cur.execute("SELECT MAX(id) FROM solutions_multi_fin").fetchone()[0]
-                    if highest_id is None:
-                        db_id = 1
-                    else:
-                        db_id = highest_id + 1
-                    # Save the design variables to the database
-                    req = "INSERT INTO solutions_multi_fin (id, "
-                    req += ", ".join(["angle_%i"%i for i in range(1,3)])
-                    # req += ", "
-                    # req += ", ".join(["TVC_y_%i"%i for i in range(1,6)])
-                    req += ", "
-                    req += ", ".join(["TVC_z_%i"%i for i in range(1,6)])
-                    req += ", "
-                    req += ", ".join(["spherical_motor_%i"%i for i in range(1,3)])
-                    req += ", "
-                    req += ", ".join(["multi_fin_motor_%i"%i for i in range(1,7)])
-                    req += ", dv_used) VALUES ("
-                    req += ", ".join(["?" for i in range(22-5)])
-                    req += ")"
-                    cur.execute(req, (db_id,)+tuple(dv)+(save_to_db,))
+                    db_id = highest_id + 1
+                # Save the design variables to the database
+                req = "INSERT INTO solutions_multi_fin (id, "
+                req += ", ".join(["angle_%i"%i for i in range(1,3)])
+                # req += ", "
+                # req += ", ".join(["TVC_y_%i"%i for i in range(1,6)])
+                req += ", "
+                req += ", ".join(["TVC_z_%i"%i for i in range(1,6)])
+                req += ", "
+                req += ", ".join(["spherical_motor_%i"%i for i in range(1,3)])
+                req += ", "
+                req += ", ".join(["multi_fin_motor_%i"%i for i in range(1,7)])
+                req += ", dv_used) VALUES ("
+                req += ", ".join(["?" for i in range(22-5)])
+                req += ")"
+                cur.execute(req, (db_id,)+tuple(dv)+(save_to_db,))
 
             # Set SRM thrust model from geometry models
             SRM_thrust_model_1 = SRM_thrust(SRM_1_model, A_t=0.065, epsilon=45)
@@ -181,7 +180,7 @@ class MAV_problem:
 
         if save_to_db is not None:
             con.commit()
-            con.close()
+        con.close()
 
         # Get the fitness by running the simulations in parallel
         with MP.get_context("spawn").Pool(processes=50) as pool:#MP.cpu_count()//2) as pool:
