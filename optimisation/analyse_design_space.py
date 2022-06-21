@@ -17,10 +17,10 @@ import pandas as pd
 import seaborn as sns
 
 # Parameters
-plot_trajectories = False
+plot_trajectories = True
 analyse_correlation = False
 get_initial_population = False
-pareto_fronts = True
+pareto_fronts = False
 
 # Tudatpy imports
 from tudatpy import plotting
@@ -31,9 +31,11 @@ con = sqlite3.connect(sys.path[0]+"/optimisation/design_space.db")
 cur = con.cursor()
 
 if plot_trajectories:
-    for dv_used in ["all", "init_angle_only", "TVC_only", "SRM_only", "*"]:
+    nice_png_fig = True
+    all_dvs_types = ["*"] if nice_png_fig else ["all", "init_angle_only", "TVC_only", "SRM_only", "*"]
+    for dv_used in all_dvs_types:
         if dv_used == "*":
-            req = "SELECT id FROM solutions_multi_fin"
+            req = "SELECT id, h_p_score, h_a_score FROM solutions_multi_fin"# ORDER BY RANDOM() LIMIT 1000"
             line_thickness = 0.05
             alpha = 0.5
         else:
@@ -41,38 +43,59 @@ if plot_trajectories:
             line_thickness = 0.5
             alpha = 1.0
         cur.execute(req)
-        ids = [i[0] for i in cur.fetchall()]
+        res = cur.fetchall()
+        ids = [i[0] for i in res]
         # Plot trajectories
-        plt.figure(figsize=(9,5))
+        if nice_png_fig:
+            plt.figure(figsize=(9,12.73))
+        else:
+            plt.figure(figsize=(9,5))
         for i, id in enumerate(ids):
             if i % 25 == 0:
                 print("Plotting trajectory %i of %i for %s"%(i+1, len(ids), dv_used), end="\r")
             # Load simulation results
-            sim_results = np.load(sys.path[0]+"/optimisation/sim_results/%i.npz"%id)
+            try:
+                sim_results = np.load(sys.path[0]+"/optimisation/sim_results/%i.npz"%id)
+            except FileNotFoundError:
+                continue
             times = sim_results["times"]
             altitudes = sim_results["dep_vars"][:,0]
+            if nice_png_fig:
+                try:
+                    score_a = max(res[i][1], 1/100)
+                    score_b = max(res[i][2], 1/100)
+                except TypeError:
+                    continue
+                line_thickness = (min(1/np.sqrt(score_a), 1)/3+min(1/np.sqrt(score_b), 1)*2/3)*0.5
+                alpha = (min(1/np.sqrt(score_a), 1)/3+min(1/np.sqrt(score_b), 1)*2/3)*0.75
             plt.plot(times[:1000]/60, altitudes[:1000]/1e3, linewidth=line_thickness, color="C%i"%(i+1), alpha=alpha)
             plt.plot(times[1001:]/60, altitudes[1001:]/1e3, linewidth=line_thickness, color="C%i"%(i+1), alpha=alpha)
-            plt.plot(times[998:1002]/60, altitudes[998:1002]/1e3, linewidth=line_thickness, linestyle="dashed", color="C%i"%(i+1), alpha=alpha)
+            plt.plot(times[998:1002]/60, altitudes[998:1002]/1e3, linewidth=line_thickness, linestyle="solid", color="C%i"%(i+1), alpha=alpha)
         print("Plotted %i trajectories for %s                     "%(len(ids), dv_used))
         # Prettify plot
         plt.xlabel("Time [min]")
         plt.ylabel("Altitude [km]")
         if dv_used == "*":
-            plt.hlines(1e3, -1e3, 1e3, color="black", linestyle="dotted", linewidth=1.0)
-            plt.ylim((-10,5500))
-            plt.xlim((-2,162))
-            plt.yscale("symlog", linthresh=1000, linscale=1.5)
-            plt.yticks([200, 400, 600, 800, 1e3, 3e3, 5e3], ["200", "400", "600", "800", "1 $\cdot 10^3$", "3 $\cdot 10^3$", "5 $\cdot 10^3$"])
+            if nice_png_fig:
+                plt.ylim((-2.5,2750))
+                plt.xlim((0,160))
+            else:
+                plt.hlines(1e3, -1e3, 1e3, color="black", linestyle="dotted", linewidth=1.0)
+                plt.ylim((-10,5500))
+                plt.xlim((-2,162))
+                plt.yscale("symlog", linthresh=1000, linscale=1.5)
+                plt.yticks([200, 400, 600, 800, 1e3, 3e3, 5e3], ["200", "400", "600", "800", "1 $\cdot 10^3$", "3 $\cdot 10^3$", "5 $\cdot 10^3$"])
         else:
             plt.ylim((-10,502))
             plt.xlim((-2,162))
         plt.grid()
         plt.tight_layout()
         if dv_used == "*":
-            plt.savefig(sys.path[0]+"/plots/optimisation/design_space_exploration/altitude.pdf")
-            # plt.axis('off')
-            # plt.savefig(sys.path[0]+"/plots/optimisation/design_space_exploration/altitude", transparent=True, dpi=350)
+            if nice_png_fig:
+                plt.axis('off')
+                plt.savefig(sys.path[0]+"/plots/optimisation/design_space_exploration/altitude", transparent=True, dpi=400)
+            else:
+                plt.savefig(sys.path[0]+"/plots/optimisation/design_space_exploration/altitude.pdf")
         else:
             plt.savefig(sys.path[0]+"/plots/optimisation/design_space_exploration/altitude_%s_sampled.pdf"%dv_used)
         plt.close()
