@@ -63,7 +63,7 @@ class MAV_problem:
         n_dvs = len(dv_s)//dv_size
         
         # Connect to the database
-        con = sqlite3.connect(sys.path[0]+"/optimisation/design_space.db")
+        con = sqlite3.connect(sys.path[0]+"/optimisation/design_space.db", timeout=30)
         cur = con.cursor()
         
         # Loop trough the design variables
