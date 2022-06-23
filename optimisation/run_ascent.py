@@ -170,7 +170,7 @@ def MAV_ascent_sim(
 
     if save_to_db is not None:
         # Connect to the database
-        con = sqlite3.connect(sys.path[0]+"/optimisation/design_space.db")
+        con = sqlite3.connect(sys.path[0]+"/optimisation/design_space.db", timeout=30)
         cur = con.cursor()
         # Insert results
         req = "UPDATE solutions_multi_fin "
@@ -192,96 +192,142 @@ def MAV_ascent_sim(
 
     return h_p_score, h_a_score, mass_score
 
+
 if __name__ == "__main__":
     # Parameters
     seed = 42
     pop_size = 8*9
     n_generations = 30
-    tuning = True
+    tuning = False
+    param_tuning = False
     
     # Select the optimisation algorithm
     # BFE: GACO, MACO, NSGA2, NSPSO, PSO_GEN
     # Multi-objectives: IHS, NSGA2, MOEAD, MACO, NSPSO
     # Turn multi-objective to single-objective: see https://esa.github.io/pygmo2/problems.html#pygmo.decompose
-    algo_name = "NSGA2" # NSGA2, MACO, NSPSO
+    algo_name = "NSPSO" # NSGA2, MACO, NSPSO
 
-    for algo_name in ["NSGA2", "MACO", "NSPSO"]:
+    # NSPSO algorithm parameters
+    omega   = 0.6   # in ]0,1[
+    c1      = 0.01  # > 0
+    c2      = 0.5   # > 0
+    chi     = 0.5   # > 0
+    v_coeff = 0.5   # in ]0,1]
+    leader_selection_range = 2 # < 100
+    diversity_mechanism = "crowding distance" # "crowding distance" or "niche count" or "max min"
 
-        # Define the range in which the design variables can vary
-        launch_angle_1_range = np.deg2rad([47.5, 60])
-        launch_angle_2_range = np.deg2rad([70, 110])
-        TVC_range = np.deg2rad([-5, 5])
-        N_TVC_nodes = 5
-        spherical_SRM_range = [[0.3, 0.2], [1.0, 0.9]]
-        multi_fin_SRM_range = [[0.3, 0.1, 0.2, 0.25, 0.35, 3], [1.25, 0.285, 0.9, 0.75, 0.9, 20]]
-        design_var_range = (
-            [launch_angle_1_range[0], launch_angle_2_range[0], *[TVC_range[0]]*N_TVC_nodes, *spherical_SRM_range[0], *multi_fin_SRM_range[0]],
-            [launch_angle_1_range[1], launch_angle_2_range[1], *[TVC_range[1]]*N_TVC_nodes, *spherical_SRM_range[1], *multi_fin_SRM_range[1]]
-        )
-
-        # Define the optimisation problem
-        if tuning:
-            ascent_problem = AP.MAV_problem(design_var_range, multi_fin_SRM, save_to_db="%s_%s_tuning_~N~" % (algo_name, seed))
-        else:
-            ascent_problem = AP.MAV_problem(design_var_range, multi_fin_SRM)
-        problem = pg.problem(ascent_problem)
-
-        # Initialise a Pygmo population
-        pop = pg.population(problem, size=0, seed=seed, b=pg.default_bfe())
-
-        # Set the algorithm
-        if algo_name == "NSGA2":
-            algo = pg.nsga2(seed=seed)
-        elif algo_name == "MACO":
-            algo = pg.maco(ker=pop_size*2//3, seed=seed, memory=True)
-        elif algo_name == "NSPSO":
-            algo = pg.nspso(seed=seed)
-        else:
-            raise ValueError("Unknown algorithm")
-        algo.set_bfe(pg.bfe())
-        algo = pg.algorithm(algo)
-
-        # Connect to database
-        con = sqlite3.connect(sys.path[0]+"/optimisation/design_space.db")
-        cur = con.cursor()
-
-        # Set best results from design space exploration as initial population
-        samples_weights = {
-            "init_angle_only": 2,
-            "TVC_only": 1,
-            "SRM_only": 3,
-            "all": 1
+    if param_tuning:
+        param_to_change = {
+            "omega": [0.3, 0.6, 0.9],
+            "c1": [0.01, 0.5, 1.0],
+            "c2": [0.1, 0.5, 1.0],
+            "chi": [0.1, 0.5, 1.5],
+            "v_coeff": [0.1, 0.5, 1.0],
+            "leader_selection_range": [1, 2, 5],
+            "diversity_mechanism": ["crowding distance", "niche count", "max min"]
         }
-        sum_weights = sum(samples_weights.values())
-        samples_weights = {k: v/sum_weights for k, v in samples_weights.items()}
-        ids = []
-        for dv_used, fraction in samples_weights.items():
-            sim_num = int(pop_size*fraction)
-            if dv_used == "all":
-                sim_num = pop_size - len(ids)
-            req = "SELECT * FROM solutions_multi_fin WHERE dv_used = '%s' ORDER BY h_a_score+h_p_score+mass_score ASC LIMIT %i"%(dv_used, sim_num)
-            cur.execute(req)
-            res = cur.fetchall()
-            [ids.append(row[0]) for row in res]
-            for row in res:
-                # Add to population
-                pop.push_back(
-                    x=row[1:3]+row[8:21],
-                    f=row[21:24])
-        con.close()
+        for idx_param_to_change in range(len(param_to_change)):
+            param_name, param_vals = list(param_to_change.items())[idx_param_to_change]
+            for param_val in param_vals:
+                if type(param_val) == str:
+                    exec("%s = '%s'" % (param_name, param_val))
+                else:
+                    exec("%s = %s" % (param_name, param_val))
+                param_tune_name = "%s_%s" % (param_name, param_val)
 
-        # print("Initial population:")
+                msg = "Running optimisation with %s = %s" % (param_name, param_val)
+                print("*"*(len(msg)+12))
+                print("***** %s *****" % msg)
+                print("*"*(len(msg)+12))
+            
+    ##################################################
+    ### Indent three times to run parameter tuning ###
+    ##################################################
+
+    # Define the range in which the design variables can vary
+    launch_angle_1_range = np.deg2rad([47.5, 60])
+    launch_angle_2_range = np.deg2rad([70, 110])
+    TVC_range = np.deg2rad([-5, 5])
+    N_TVC_nodes = 5
+    spherical_SRM_range = [[0.3, 0.2], [1.0, 0.9]]
+    multi_fin_SRM_range = [[0.3, 0.1, 0.2, 0.25, 0.35, 3], [1.25, 0.285, 0.9, 0.75, 0.9, 20]]
+    design_var_range = (
+        [launch_angle_1_range[0], launch_angle_2_range[0], *[TVC_range[0]]*N_TVC_nodes, *spherical_SRM_range[0], *multi_fin_SRM_range[0]],
+        [launch_angle_1_range[1], launch_angle_2_range[1], *[TVC_range[1]]*N_TVC_nodes, *spherical_SRM_range[1], *multi_fin_SRM_range[1]]
+    )
+
+    # Define the optimisation problem
+    if tuning:
+        ascent_problem = AP.MAV_problem(design_var_range, multi_fin_SRM, save_to_db="%s_%s_tuning_~N~" % (algo_name, seed))
+    elif param_tuning:
+        ascent_problem = AP.MAV_problem(design_var_range, multi_fin_SRM, save_to_db="%s_%s_pt_~N~" % (param_tune_name, seed))
+    else:
+        ascent_problem = AP.MAV_problem(design_var_range, multi_fin_SRM)
+    problem = pg.problem(ascent_problem)
+
+    # Initialise a Pygmo population
+    pop = pg.population(problem, size=0, seed=seed, b=pg.default_bfe())
+
+    # Set the algorithm
+    if algo_name == "NSGA2":
+        algo = pg.nsga2(seed=seed)
+    elif algo_name == "MACO":
+        algo = pg.maco(ker=pop_size*2//3, seed=seed, memory=True)
+    elif algo_name == "NSPSO":
+        algo = pg.nspso(seed=seed, omega=omega, c1=c1, c2=c2, chi=chi, v_coeff=v_coeff, leader_selection_range=leader_selection_range, diversity_mechanism=diversity_mechanism)
+    else:
+        raise ValueError("Unknown algorithm")
+    algo.set_bfe(pg.bfe())
+    algo = pg.algorithm(algo)
+
+    # Connect to database
+    con = sqlite3.connect(sys.path[0]+"/optimisation/design_space.db", timeout=30)
+    cur = con.cursor()
+
+    # Set best results from design space exploration as initial population
+    samples_weights = {
+        "init_angle_only": 2,
+        "TVC_only": 1,
+        "SRM_only": 3,
+        "all": 1
+    }
+    sum_weights = sum(samples_weights.values())
+    samples_weights = {k: v/sum_weights for k, v in samples_weights.items()}
+    ids = []
+    for dv_used, fraction in samples_weights.items():
+        sim_num = int(pop_size*fraction)
+        if dv_used == "all":
+            sim_num = pop_size - len(ids)
+        req = "SELECT * FROM solutions_multi_fin WHERE dv_used = '%s' ORDER BY h_a_score+h_p_score+mass_score ASC LIMIT %i"%(dv_used, sim_num)
+        cur.execute(req)
+        res = cur.fetchall()
+        [ids.append(row[0]) for row in res]
+        for row in res:
+            # Add to population
+            pop.push_back(
+                x=row[1:3]+row[8:21],
+                f=row[21:24])
+    con.close()
+
+    # print("Initial population:")
+    # print(pop)
+
+    # Run the optimisation
+    for i in range(1, n_generations+1):
+        print("*** Running generation %2d / %2d with %s (seed %s) ***" % (i, n_generations, algo_name, seed))
+
+        # Evolve the population
+        pop = algo.evolve(pop)
+
+        # # Print the population
         # print(pop)
 
-        # Run the optimisation
-        for i in range(1, n_generations+1):
-            print("*** Running generation %2d / %2d with %s (seed %s)***" % (i, n_generations, algo_name, seed))
+        
+    ##################################################
+    ### Indent three times to run parameter tuning ###
+    ##################################################
 
-            # Evolve the population
-            pop = algo.evolve(pop)
 
-            # # Print the population
-            # print(pop)
 
 
 # test_scoring = False
@@ -304,6 +350,11 @@ if __name__ == "__main__":
 
 #     plt.plot(masses, scores)
 #     ymin, ymax = plt.ylim()
+#     plt.vlines([400], -10, 10, colors=["red"])
+#     plt.ylim(ymin, ymax), plt.xlim(min(masses), max(masses))
+#     plt.xlabel("Mass [kg]"), plt.ylabel("Fitness")
+#     plt.grid(), plt.tight_layout()
+#     plt.show()
 #     plt.vlines([400], -10, 10, colors=["red"])
 #     plt.ylim(ymin, ymax), plt.xlim(min(masses), max(masses))
 #     plt.xlabel("Mass [kg]"), plt.ylabel("Fitness")
