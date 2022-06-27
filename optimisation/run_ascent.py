@@ -208,23 +208,23 @@ if __name__ == "__main__":
     algo_name = "NSPSO" # NSGA2, MACO, NSPSO
 
     # NSPSO algorithm parameters
-    omega   = 0.6   # in ]0,1[
+    diversity_mechanism = "niche count" # "crowding distance" or "niche count" or "max min"
+    leader_selection_range = 5 # < 100
+    omega   = 0.8   # in ]0,1[
+    v_coeff = 0.05   # in ]0,1]
+    chi     = 0.25   # > 0
     c1      = 0.01  # > 0
-    c2      = 0.5   # > 0
-    chi     = 0.5   # > 0
-    v_coeff = 0.5   # in ]0,1]
-    leader_selection_range = 2 # < 100
-    diversity_mechanism = "crowding distance" # "crowding distance" or "niche count" or "max min"
+    c2      = 0.25   # > 0
 
     if param_tuning:
         param_to_change = {
-            "omega": [0.3, 0.6, 0.9],
-            "c1": [0.01, 0.5, 1.0],
-            "c2": [0.1, 0.5, 1.0],
-            "chi": [0.1, 0.5, 1.5],
-            "v_coeff": [0.1, 0.5, 1.0],
-            "leader_selection_range": [1, 2, 5],
-            "diversity_mechanism": ["crowding distance", "niche count", "max min"]
+            "diversity_mechanism": ["crowding distance", "niche count", "max min"],
+            "leader_selection_range": [1, 2, 3, 5, 10],
+            "omega": [0.4, 0.5, 0.6, 0.7, 0.8],
+            "v_coeff": [0.05, 0.15, 0.25, 0.5, 0.75],
+            "chi": [0.1, 0.25, 0.5, 1.5, 3.0],
+            "c1": [0.01, 0.05, 0.15, 0.3, 0.5, 1.0],
+            "c2": [0.1, 0.25, 0.5, 1.0]
         }
         for idx_param_to_change in range(len(param_to_change)):
             param_name, param_vals = list(param_to_change.items())[idx_param_to_change]
@@ -274,7 +274,7 @@ if __name__ == "__main__":
     elif algo_name == "MACO":
         algo = pg.maco(ker=pop_size*2//3, seed=seed, memory=True)
     elif algo_name == "NSPSO":
-        algo = pg.nspso(seed=seed, omega=omega, c1=c1, c2=c2, chi=chi, v_coeff=v_coeff, leader_selection_range=leader_selection_range, diversity_mechanism=diversity_mechanism)
+        algo = pg.nspso(seed=seed, omega=omega, c1=c1, c2=c2, chi=chi, v_coeff=v_coeff, leader_selection_range=leader_selection_range, diversity_mechanism=diversity_mechanism, memory=True)
     else:
         raise ValueError("Unknown algorithm")
     algo.set_bfe(pg.bfe())
