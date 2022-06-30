@@ -183,7 +183,7 @@ class MAV_problem:
         con.close()
 
         # Get the fitness by running the simulations in parallel
-        with MP.get_context("spawn").Pool(processes=50) as pool:#MP.cpu_count()//2) as pool:
+        with MP.get_context("spawn").Pool(processes=25) as pool:#MP.cpu_count()//2) as pool:
             outputs = pool.starmap(MAV_ascent_sim, inputs)
 
         # Return the 1D list of fitnesses
