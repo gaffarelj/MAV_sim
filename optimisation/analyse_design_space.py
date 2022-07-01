@@ -35,7 +35,7 @@ if plot_trajectories:
     all_dvs_types = ["*"] if nice_png_fig else ["all", "init_angle_only", "TVC_only", "SRM_only", "*"]
     for dv_used in all_dvs_types:
         if dv_used == "*":
-            req = "SELECT id, h_p_score, h_a_score FROM solutions_multi_fin"# ORDER BY RANDOM() LIMIT 1000"
+            req = "SELECT id, h_p_score, h_a_score FROM solutions_multi_fin WHERE h_p_score IS NOT NULL AND angle_1 IS NOT NULL"# ORDER BY RANDOM() LIMIT 1000"
             line_thickness = 0.05
             alpha = 0.5
         else:
@@ -66,8 +66,8 @@ if plot_trajectories:
                     score_b = max(res[i][2], 1/100)
                 except TypeError:
                     continue
-                line_thickness = (min(1/np.sqrt(score_a), 1)/3+min(1/np.sqrt(score_b), 1)*2/3)*0.5
-                alpha = (min(1/np.sqrt(score_a), 1)/3+min(1/np.sqrt(score_b), 1)*2/3)*0.75
+                line_thickness = (min(1/np.sqrt(score_a), 1)/3+min(1/np.sqrt(score_b), 1)*2/3)*0.025
+                alpha = (min(1/np.sqrt(score_a), 1)/3+min(1/np.sqrt(score_b), 1)*2/3)#*0.75
             plt.plot(times[:1000]/60, altitudes[:1000]/1e3, linewidth=line_thickness, color="C%i"%(i+1), alpha=alpha)
             plt.plot(times[1001:]/60, altitudes[1001:]/1e3, linewidth=line_thickness, color="C%i"%(i+1), alpha=alpha)
             plt.plot(times[998:1002]/60, altitudes[998:1002]/1e3, linewidth=line_thickness, linestyle="solid", color="C%i"%(i+1), alpha=alpha)
