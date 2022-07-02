@@ -37,7 +37,7 @@ class spherical_SRM:
         # Compute the burning surface
         return 4 * np.pi * (self.R_i+b)**2 - np.pi * (self.R_e+b)**2 + 2*np.pi*(self.R_e+b)*(self.R_o - self.R_i-b)
 
-    def plot_geometry(self, b=0, final_b=None, ax_in=None):
+    def plot_geometry(self, b=0, final_b=None, ax_in=None, add_title=True):
         # First, check the validity of the given burnt thickness
         self.check_b(b)
 
@@ -81,7 +81,8 @@ class spherical_SRM:
         ax.set_ylim([0,self.R_o*1.25])
         ax.set_yticks([self.R_i, self.R_o])
         # Add title
-        ax.set_title("$b = %.3f$ [m]" % b)
+        if add_title:
+            ax.set_title("$b = %.3f$ [m]" % b)
         # Use a tight layout
         plt.tight_layout()
         # Return the axis used
