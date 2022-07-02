@@ -21,6 +21,9 @@ from thrust.solid_thrust_multi_stage import SRM_thrust_rk4 as SRM_thrust
 from thrust.models.spherical import spherical_SRM
 from thrust.models.multi_fin import multi_fin_SRM
 
+# Tudatpy imports
+from tudatpy import plotting
+
 class MAV_problem:
 
     def __init__(self, design_var_range, thrust_geo_model_1, save_to_db=None):
@@ -45,7 +48,7 @@ class MAV_problem:
         # Return the fitness for a single decision vector
         return self.batch_fitness(dv)
 
-    def batch_fitness(self, dv_s, save_to_db=None):
+    def batch_fitness(self, dv_s, save_to_db=None, plot_geo=False, plot_thrust=False, better_accuracy=False):
         inputs, fitnesses = [], []
         if self.i_gen is None:
             self.i_gen = 0
@@ -106,6 +109,7 @@ class MAV_problem:
             SRM_2_model = spherical_SRM(R_o_2, R_i_2)
 
             db_id = None
+            skip_sim = False
             # Skip if inputs already in database
             req = "SELECT id, h_p_score, h_a_score, mass_score, dv_used FROM solutions_multi_fin WHERE "
             req += " AND ".join(["angle_%i = ?"%i for i in range(1,3)])
@@ -146,9 +150,9 @@ class MAV_problem:
                             # Save the design variables to the database
                             req = "INSERT INTO solutions_multi_fin (id, h_p_score, h_a_score, mass_score, dv_used) VALUES (?, ?, ?, ?, ?)"
                             cur.execute(req, (db_id, db_h_p_score, db_h_a_score, db_mass_score, save_to_db))
-                    continue
+                    skip_sim = True
             # Otherwise, add inputs to database
-            elif save_to_db is not None:
+            elif save_to_db is not None and not skip_sim:
                 # Set inputs id as latest one + 1
                 highest_id = cur.execute("SELECT MAX(id) FROM solutions_multi_fin").fetchone()[0]
                 if highest_id is None:
@@ -175,8 +179,32 @@ class MAV_problem:
             SRM_thrust_model_1 = SRM_thrust(SRM_1_model, A_t=0.065, epsilon=45)
             SRM_thrust_model_2 = SRM_thrust(SRM_2_model, A_t=0.005, epsilon=73, p_a=0)
 
-            # inputs.append((launch_angle_1, launch_angle_2, TVC_angles_y, TVC_angles_z, SRM_thrust_model_1, SRM_thrust_model_2, False, db_id))
-            inputs.append((launch_angle_1, launch_angle_2, 0, TVC_angles_z, SRM_thrust_model_1, SRM_thrust_model_2, False, db_id))
+            if plot_geo:
+                SRM_1_model.plot_geometry(add_title=False)
+                plt.savefig(sys.path[0]+"/plots/optimisation/results/motors/%i_1_geo.pdf"%db_id)
+                plt.close()
+                SRM_2_model.plot_geometry(add_title=False)
+                plt.savefig(sys.path[0]+"/plots/optimisation/results/motors/%i_2_geo.pdf"%db_id)
+                plt.close()
+            if plot_thrust:
+                SRM_thrust_model_1.simulate_full_burn(dt=2e-5, use_cpp=True)
+                # M_P_s = [SRM_1_model.get_V_p()*SRM_thrust_model_1.rho_p]
+                # for i in range(1,len(SRM_thrust_model_1.saved_burn_times)):
+                #     M_P_s.append(M_P_s[-1] + SRM_thrust_model_1.m_dot_interpolator(SRM_thrust_model_1.saved_burn_times[i])*(SRM_thrust_model_1.saved_burn_times[i]-SRM_thrust_model_1.saved_burn_times[i-1]))
+                plt.plot(SRM_thrust_model_1.saved_burn_times, np.asarray(SRM_thrust_model_1.saved_magnitudes)/1e3)
+                plt.xlabel("Burn time [s]"), plt.ylabel("Thrust [kN]")
+                plt.grid(), plt.tight_layout()
+                plt.savefig(sys.path[0]+"/plots/optimisation/results/motors/%i_1_thrust.pdf"%db_id)
+                plt.close()
+                SRM_thrust_model_2.simulate_full_burn(dt=1.5e-2)
+                plt.plot(SRM_thrust_model_2.saved_burn_times, np.asarray(SRM_thrust_model_2.saved_magnitudes)/1e3)
+                plt.xlabel("Burn time [s]"), plt.ylabel("Thrust [kN]")
+                plt.grid(), plt.tight_layout()
+                plt.savefig(sys.path[0]+"/plots/optimisation/results/motors/%i_2_thrust.pdf"%db_id)
+            
+            if not skip_sim or better_accuracy:
+                # inputs.append((launch_angle_1, launch_angle_2, TVC_angles_y, TVC_angles_z, SRM_thrust_model_1, SRM_thrust_model_2, False, db_id))
+                inputs.append((launch_angle_1, launch_angle_2, 0, TVC_angles_z, SRM_thrust_model_1, SRM_thrust_model_2, False, db_id, better_accuracy))
 
         if save_to_db is not None:
             con.commit()

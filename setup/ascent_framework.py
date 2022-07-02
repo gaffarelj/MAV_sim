@@ -191,7 +191,8 @@ class MAV_ascent:
         thrust_fname=None,
         thrust_dt=None,
         use_cpp=False,
-        better_precision=False
+        better_precision=False,
+        extra_thrust_dt=False
     ):
         # Setup the MAV thrust class from the thrust models input to this ascent class
         self.thrust = MAV_thrust(
@@ -202,7 +203,8 @@ class MAV_ascent:
             self.body_fixed_thrust_direction_z[self.current_stage-1],
             thrust_filename=thrust_fname,
             dt=thrust_dt,
-            use_cpp=use_cpp)
+            use_cpp=use_cpp,
+            extra_thrust_dt=extra_thrust_dt)
 
         # Define the thrust acceleration direction and magnitude from the thrust class
         thrust_direction_settings = propagation_setup.thrust.custom_thrust_direction(self.thrust.get_thrust_orientation)

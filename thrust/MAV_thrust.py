@@ -18,11 +18,13 @@ from thrust.solid_thrust_multi_stage import SRM_thrust_rk4
 class MAV_thrust:
 
     def __init__(self, ascent_model, angle, thrust_model, body_directions_y=0, body_directions_z=0,
-    print_status=False, dt=None, thrust_filename=None, thrust_devs=[0, 0], use_cpp=False):
+    print_status=False, dt=None, thrust_filename=None, thrust_devs=[0, 0], use_cpp=False, extra_thrust_dt=False):
         self.angle = angle
         self.thrust_model = thrust_model
         if dt is None:
             dt = 2.0e-6 if ascent_model.current_stage == 1 else 1.5e-2
+        if extra_thrust_dt:
+            dt /= 10
 
         if type(self.thrust_model) == list and type(self.thrust_model[0]) in [float, int]:
             self.thrust_type = "constant"
@@ -129,7 +131,7 @@ class MAV_thrust:
         #self.angle = aerodynamic_angle_calculator.get_angle(environment.angle_of_attack)
         ###
         # Set thrust in vertical frame and transpose it
-        thrust_direction_vertical_frame = np.array([[0, np.sin(self.angle), - np.cos(self.angle)]]).T
+        thrust_direction_vertical_frame = np.array([[0, np.sin(self.angle), -np.cos(self.angle)]]).T
         thrust_direction_vertical_frame = thrust_direction_vertical_frame / np.linalg.norm(thrust_direction_vertical_frame)
         # Retrieve rotation matrix from vertical to inertial frame from the aerodynamic angle calculator
         vertical_to_inertial_frame = aerodynamic_angle_calculator.get_rotation_matrix_between_frames(

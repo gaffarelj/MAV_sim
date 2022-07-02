@@ -52,7 +52,8 @@ def MAV_ascent_sim(
         thrust_model_1,
         thrust_model_2,
         print_times=False,
-        save_to_db=None
+        save_to_db=None,
+        better_accuracy=False
     ):
     # print()
     # print("Simulating MAV ascent with inputs:")#, hash(str(thrust_angle_1)+str(thrust_angle_2)+str(TVC_angles_y)+str(TVC_angles_z)+str(thrust_model_1)+str(thrust_model_2)))
@@ -90,7 +91,7 @@ def MAV_ascent_sim(
         ascent_model.create_bodies(stage=stage, add_sun=True, use_new_coeffs=True, custom_exponential_model=True)
         t0 = T.time()
         try:
-            ascent_model.create_accelerations(use_cpp=(stage==1), better_precision=True)
+            ascent_model.create_accelerations(use_cpp=(stage==1), better_precision=True, extra_thrust_dt=better_accuracy)
         except ValueError:
             return 100, 100
         guidance_object = FakeAeroGuidance()
@@ -100,7 +101,7 @@ def MAV_ascent_sim(
         ascent_model.dependent_variables_to_save.append(propagation_setup.dependent_variable.altitude(ascent_model.current_name, "Mars"))
         ascent_model.create_termination_settings(end_time=160*60, cpu_time_termination=30)
         ascent_model.create_propagator_settings()
-        ascent_model.create_integrator_settings()
+        ascent_model.create_integrator_settings(better_accuracy=better_accuracy)
         with util.redirect_std():
             t1 = T.time()
             times, states, dep_vars = ascent_model.run_simulation()
