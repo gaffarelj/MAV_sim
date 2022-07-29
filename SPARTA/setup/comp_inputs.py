@@ -1,12 +1,14 @@
 import numpy as np
-import sys
-sys.path.append("/mnt/c/TUDAT/tudat-bundle/build/tudatpy")
-#sys.path.append("/cala/jeremie/tudat-bundle/build/tudatpy")
+import sys, os
+# Add tudatpy path
+if "cala" in os.getcwd():
+    sys.path.append("/cala/jeremie/tudat-bundle/build/tudatpy")
+else:
+    sys.path.append("/mnt/c/TUDAT/tudat-bundle/build/tudatpy")
 # Set path to uppermost project level
 sys.path = [p for p in sys.path if p != ""]
 while sys.path[0].split("/")[-1] != "MAV_sim":
     sys.path.insert(0,"/".join(sys.path[0].split("/")[:-1]))
-import os
 import shutil
 import tudatpy.util as TU
 

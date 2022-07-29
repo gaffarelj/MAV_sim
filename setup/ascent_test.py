@@ -23,7 +23,8 @@ from thrust.models.multi_fin import multi_fin_SRM
 # from thrust.models.rod_and_tube import rod_and_tube_SRM
 # from thrust.models.anchor import anchor_SRM
 from thrust.models.spherical import spherical_SRM
-from thrust.solid_thrust import SRM_thrust
+# from thrust.solid_thrust import SRM_thrust
+from thrust.solid_thrust_multi_stage import SRM_thrust_rk4 as SRM_thrust
 
 use_SRM = True
 
@@ -142,15 +143,18 @@ try:
 except IndexError:
     idx_crop = -1
 
+# idx_crop = np.where(times >= 20)[0][0]
 dts = np.diff(times*60)
 print("Minimum timestep was of %.3e s, maximum of %.3e s." % (np.ma.masked_array(dts, mask=dts==0).min(), max(dts)))
 
-# plt.plot(times[:idx_crop], dts[:idx_crop])
-# plt.grid()
-# plt.xlabel("Time [min]"), plt.ylabel("Time step [s]")
-# plt.tight_layout()
-# plt.yscale("log")
-# plt.show()
+plt.figure(figsize=(9,5))
+plt.plot(times[:idx_crop], dts[:idx_crop])
+plt.grid()
+plt.xlabel("Time [min]"), plt.ylabel("Time step [s]")
+plt.yscale("log")
+plt.tight_layout()
+plt.savefig(sys.path[0]+"/plots/setup/benchmark_dts.pdf")
+plt.close()
 
 # fig = plt.figure(figsize=(7, 6))
 # ax = fig.add_subplot(111, projection="3d")

@@ -51,9 +51,9 @@ from thrust.models.rod_and_tube import rod_and_tube_SRM
 
 MC_runs = 0
 fact_run = True
-test_multi_fin_dep_vars = True
-test_spherical_dep_vars = True
-test_tubular_dep_vars = True
+test_multi_fin_dep_vars = False
+test_spherical_dep_vars = False
+test_tubular_dep_vars = False
 test_rod_and_tube_dep_vars = True
 
 operators_to_run = {
@@ -73,9 +73,9 @@ if test_multi_fin_dep_vars:
     des_vars_names = ["L", "R_o", "R_{i_{frac}}", "N_f", "L_{f_{frac}}", "w_{f_{frac}}"]
     des_vars_type = [float, float, float, int, float, float]
     if fact_run:
-        fig, axes = plt.subplots(len(des_vars_range[0])-1, len(operators_to_run.keys()), figsize=(15, 15), subplot_kw=dict(projection='polar'))
+        fig, axes = plt.subplots(len(des_vars_range[0])-2, len(operators_to_run.keys()), figsize=(15, 12), subplot_kw=dict(projection='polar'))
         for i, des_var_range in enumerate(np.asarray(des_vars_range).T):
-            if i != 0: # skip SRM length (can be whatever)
+            if i not in [0, 1]: # skip SRM length (can be whatever)
                 print(i, des_var_range)
                 for j, (op_name, op) in enumerate(operators_to_run.items()):
 
@@ -88,9 +88,12 @@ if test_multi_fin_dep_vars:
                     L_f = L_f_frac * R_i
                     w_f = 2*np.pi*(R_i-L_f)/N_f*w_f_frac
 
-                    ax = axes[i-1, j]
+                    ax = axes[i-2, j]
                     multi_fin_SRM(R_o, R_i, N_f, w_f, L_f, L, False).plot_geometry(ax_in=ax)
-                    ax.set_title("$%s$ = %.2f" % (des_vars_names[i], des_var[i]), fontsize=14)
+                    ax.tick_params(top=False, bottom=False, left=False, right=False, labelleft=False, labelbottom=False)
+                    ax.grid(False)
+                    ax.set(frame_on=False)
+                    ax.set_title("$%s$ = %.3f" % (des_vars_names[i], des_var[i]), fontsize=18, y=0.92)
         plt.tight_layout()
         plt.savefig(sys.path[0]+"/optimisation/des_vars_verif/factorial/multi_fin_SRM.pdf")
         plt.close()
@@ -122,7 +125,7 @@ if test_spherical_dep_vars:
     des_vars_names = ["R_o", "R_{i_{frac}}"]
     des_vars_type = [float, float]
     if fact_run:
-        fig, axes = plt.subplots(len(des_vars_range[0])-1, len(operators_to_run.keys()), figsize=(15, 4), subplot_kw=dict(projection='polar'))
+        fig, axes = plt.subplots(len(des_vars_range[0])-1, len(operators_to_run.keys()), figsize=(15, 3.5), subplot_kw=dict(projection='polar'))
         for i, des_var_range in enumerate(np.asarray(des_vars_range).T):
             if i != 0: # skip SRM length (can be whatever)
                 print(i, des_var_range)
@@ -138,7 +141,10 @@ if test_spherical_dep_vars:
                     # ax = axes[i-1, j]
                     ax = axes[j]
                     spherical_SRM(R_o, R_i).plot_geometry(ax_in=ax)
-                    ax.set_title("$%s$ = %.2f" % (des_vars_names[i], des_var[i]), fontsize=14)
+                    ax.tick_params(top=False, bottom=False, left=False, right=False, labelleft=False, labelbottom=False)
+                    ax.grid(False)
+                    ax.set(frame_on=False)
+                    ax.set_title("$%s$ = %.3f" % (des_vars_names[i], des_var[i]), fontsize=18, y=0.92)
         plt.tight_layout()
         plt.savefig(sys.path[0]+"/optimisation/des_vars_verif/factorial/spherical_SRM.pdf")
         plt.close()
@@ -152,9 +158,9 @@ if test_tubular_dep_vars:
     des_vars_names = ["L", "R_o", "R_{i_{frac}}"]
     des_vars_type = [float, float, float]
     if fact_run:
-        fig, axes = plt.subplots(len(des_vars_range[0])-1, len(operators_to_run.keys()), figsize=(15, 7), subplot_kw=dict(projection='polar'))
+        fig, axes = plt.subplots(len(des_vars_range[0])-2, len(operators_to_run.keys()), figsize=(15, 3.5), subplot_kw=dict(projection='polar'))
         for i, des_var_range in enumerate(np.asarray(des_vars_range).T):
-            if i != 0: # skip SRM length (can be whatever)
+            if i not in [0, 1]: # skip SRM length (can be whatever)
                 print(i, des_var_range)
                 for j, (op_name, op) in enumerate(operators_to_run.items()):
 
@@ -165,9 +171,12 @@ if test_tubular_dep_vars:
                     L, R_o, R_i_frac = des_var
                     R_i = R_i_frac * R_o
 
-                    ax = axes[i-1, j]
+                    ax = axes[j]
                     tubular_SRM(R_o, R_i, L).plot_geometry(ax_in=ax)
-                    ax.set_title("$%s$ = %.2f" % (des_vars_names[i], des_var[i]), fontsize=14)
+                    ax.tick_params(top=False, bottom=False, left=False, right=False, labelleft=False, labelbottom=False)
+                    ax.grid(False)
+                    ax.set(frame_on=False)
+                    ax.set_title("$%s$ = %.3f" % (des_vars_names[i], des_var[i]), fontsize=18, y=0.92)
         plt.tight_layout()
         plt.savefig(sys.path[0]+"/optimisation/des_vars_verif/factorial/tubular_SRM.pdf")
         plt.close()
@@ -181,9 +190,9 @@ if test_rod_and_tube_dep_vars:
     des_vars_names = ["L", "R_o", "R_{mid_{frac}}", "R_{i_{frac}}"]
     des_vars_type = [float, float, float, float]
     if fact_run:
-        fig, axes = plt.subplots(len(des_vars_range[0])-1, len(operators_to_run.keys()), figsize=(15, 10), subplot_kw=dict(projection='polar'))
+        fig, axes = plt.subplots(len(des_vars_range[0])-2, len(operators_to_run.keys()), figsize=(15, 6), subplot_kw=dict(projection='polar'))
         for i, des_var_range in enumerate(np.asarray(des_vars_range).T):
-            if i != 0: # skip SRM length (can be whatever)
+            if i not in [0, 1]: # skip SRM length (can be whatever)
                 print(i, des_var_range)
                 for j, (op_name, op) in enumerate(operators_to_run.items()):
 
@@ -195,9 +204,12 @@ if test_rod_and_tube_dep_vars:
                     R_mid = R_mid_frac * R_o
                     R_i = R_i_frac * R_mid
 
-                    ax = axes[i-1, j]
+                    ax = axes[i-2, j]
                     rod_and_tube_SRM(R_o, R_mid, R_i, L).plot_geometry(ax_in=ax)
-                    ax.set_title("$%s$ = %.2f" % (des_vars_names[i], des_var[i]), fontsize=14)
+                    ax.tick_params(top=False, bottom=False, left=False, right=False, labelleft=False, labelbottom=False)
+                    ax.grid(False)
+                    ax.set(frame_on=False)
+                    ax.set_title("$%s$ = %.3f" % (des_vars_names[i], des_var[i]), fontsize=18, y=0.92)
         plt.tight_layout()
         plt.savefig(sys.path[0]+"/optimisation/des_vars_verif/factorial/rod_and_tube_SRM.pdf")
         plt.close()

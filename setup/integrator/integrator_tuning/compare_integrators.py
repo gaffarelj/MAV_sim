@@ -18,7 +18,7 @@ from matplotlib import pyplot as plt
 from tudatpy.kernel.numerical_simulation import propagation_setup
 
 # Parameters
-method = "variable" # "variable" or "fixed"
+method = "fixed" # "variable" or "fixed"
 allowed_errors = [5e3, 5]
 
 # Connect to the database
@@ -74,12 +74,13 @@ for integ in coefficients:
             else:
                 impossible_tol[1] = row[6]
         else:
-            if row[4] != 999999999 and row[5] != 999999999 and row[4] >= 50 and row[5] >= 0.05 and row[3] < 3e4:
-                f_evals.append(row[3])
-                errors_pos.append(row[4])
-                errors_vel.append(row[5])
-                i_plotted += 1
-                print("Dt:" if method == "fixed" else "Tol:", row[7] if method == "fixed" else row[6], "Fevals:", row[3], "Error pos:", row[4], "Error vel:", row[5])
+            if row[4] != 999999999 and row[5] != 999999999:
+                if (row[4] >= 50 and row[5] >= 0.05 and row[3] < 3e4) or not method == "variable":
+                    f_evals.append(row[3])
+                    errors_pos.append(row[4])
+                    errors_vel.append(row[5])
+                    i_plotted += 1
+                    print("Dt:" if method == "fixed" else "Tol:", row[7] if method == "fixed" else row[6], "Fevals:", row[3], "Error pos:", row[4], "Error vel:", row[5])
             elif row[4] == 999999999:
                 print("Impossible tol:", row[6])
     if method == "variable" and len(impossible_tol) != 0:

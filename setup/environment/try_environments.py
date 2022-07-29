@@ -13,9 +13,11 @@ while sys.path[0].split("/")[-1] != "MAV_sim":
 import numpy as np
 from matplotlib import pyplot as plt
 import glob
+from datetime import datetime
 
 # Tudatpy imports
 from tudatpy.kernel.numerical_simulation import environment_setup, propagation_setup
+from tudatpy.kernel.astro import time_conversion
 from tudatpy import util
 
 # Custom imports
@@ -35,7 +37,7 @@ if analyse_gravity:
     n_accs = 7
     f_name = "gravity"
 elif analyse_atmo:
-    n_accs = 4
+    n_accs = 3
     f_name = "atmo"
 elif analyse_misc:
     n_accs = 3
@@ -78,9 +80,9 @@ def environment_names_and_settings(i, acc_dict):
             name = "Exponential atmosphere"
         elif i == 1:
             name = "Two-steps exponential atmosphere"
+        # elif i == 2:
+        #     name = "GRAM 2010"
         elif i == 2:
-            name = "GRAM 2010"
-        elif i == 3:
             name = "MCD 5.3"
     elif analyse_misc:
         acc_dict["Mars"] = [
@@ -108,10 +110,11 @@ def environment_names_and_settings(i, acc_dict):
             name = "%s PM" % bodies[i]
     return name, acc_dict
 
+max_h = None
 fig1 = plt.figure(figsize=(9,5))
 fig2 = plt.figure(figsize=(9,5))
 if analyse_atmo:
-    fig3 = plt.figure(figsize=(9,5))
+    fig3 = plt.figure(figsize=(9,3.5))
 base_states = None
 base_label = None
 for i_acc in range(n_accs):
@@ -134,9 +137,9 @@ for i_acc in range(n_accs):
         [0, -0.05, 0.0, 0.05, 0.05],
         0   # second stage has no TVC
     ]
-
+    epoch = 0#time_conversion.julian_day_to_seconds_since_epoch(time_conversion.calendar_date_to_julian_day(datetime(2031, 1, 1)))
     MAV_ascent = ascent_framework.MAV_ascent(
-        launch_epoch = 0,
+        launch_epoch = epoch if analyse_other_pm else 0,
         launch_lat = np.deg2rad(18.85),
         launch_lon = np.deg2rad(77.52),
         launch_h = -2.5e3,
@@ -159,8 +162,8 @@ for i_acc in range(n_accs):
             include_radiation_pressure=analyse_misc,
             more_bodies=analyse_other_pm,
             custom_exponential_model=(analyse_atmo and i_acc==1),
-            use_MCD=(analyse_atmo and i_acc==3),
-            use_GRAM=(analyse_atmo and i_acc==2)
+            use_MCD=(analyse_atmo and i_acc==2),
+            # use_GRAM=(analyse_atmo and i_acc==2)
         )
         accelerations_dict = MAV_ascent.create_accelerations(use_cpp=(stage==1), only_thrust_dict=True, thrust_fname=glob.glob(sys.path[0]+"/data/best_integrator_dt/thrust_%i_dt_*.npz"%stage)[0])
         label_acc, accelerations_dict = environment_names_and_settings(i_acc, accelerations_dict)
@@ -239,8 +242,11 @@ for i_acc in range(n_accs):
         print("For %s, final difference of %.2e m and %.2e m/s" %(label, positions_diff[-1], velocity_diff[-1]))
     if analyse_atmo:
         plt.figure(fig3)
+        idx_crop = np.argmax(dep_vars[:,0])
         # Plot altitude vs density
-        plt.plot(dep_vars[:,0]/1e3, dep_vars[:,1], label=label_acc)
+        plt.plot(dep_vars[:idx_crop,0]/1e3, dep_vars[:idx_crop,1], label=label_acc)
+        if i_acc == 2:
+            max_h = max(dep_vars[:,0])/1e3
 
 
 plt.figure(fig1)
@@ -248,12 +254,14 @@ if not analyse_atmo:
     xlims = plt.xlim()
     plt.hlines(allowable_errors[0], -1e3, 1e3, colors="orange", linestyles="dashed")
     plt.xlim(xlims)
+else:
+    plt.ylim(1e4, 3e7)
+plt.legend(loc="lower right")
 plt.xlabel("Time [min]")
 plt.ylabel("$r(t) - r(0)$ [m]")
 plt.title("Position over time")
 plt.grid()
 plt.yscale("log")
-plt.legend(loc="lower right")
 plt.tight_layout()
 plt.savefig(sys.path[0]+"/plots/setup/environment/accelerations_%s_position.pdf" % f_name)
 
@@ -262,6 +270,8 @@ if not analyse_atmo:
     xlims = plt.xlim()
     plt.hlines(allowable_errors[1], -1e3, 1e3, colors="orange", linestyles="dashed")
     plt.xlim(xlims)
+else:
+    plt.ylim(9e2, 1e4)
 plt.xlabel("Time [min]")
 plt.ylabel("$v(t) - v(0)$ [m/s]")
 plt.title("Velocity over time")
@@ -275,8 +285,9 @@ if analyse_atmo:
     plt.figure(fig3)
     plt.xlabel("Altitude [km]")
     plt.ylabel("Density [kg/m3]")
+    plt.xlim(-5, max_h)
     plt.grid()
     plt.yscale("log")
-    plt.legend(loc="lower right")
+    plt.legend(loc="lower left")
     plt.tight_layout()
     plt.savefig(sys.path[0]+"/plots/setup/environment/accelerations_%s_density.pdf" % f_name)

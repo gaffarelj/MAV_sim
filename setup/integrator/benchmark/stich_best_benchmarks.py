@@ -69,8 +69,8 @@ ax1 = fig.add_subplot(gs[0, 0])
 ax2 = fig.add_subplot(gs[0, 1])
 # Only plot mass up to 13min
 idx_crop = np.where(times_stiched >= 13*60)[0][0]
-ax1.plot(times_stiched/60, dep_vars_stiched[:,0]/1e3, label="Benchmark")
-ax2.plot(times_stiched[:idx_crop]/60, states_stiched[:idx_crop,-1], label="Benchmark")
+ax1.plot(times_stiched/60, dep_vars_stiched[:,0]/1e3, label="Tuned setup")
+ax2.plot(times_stiched[:idx_crop]/60, states_stiched[:idx_crop,-1], label="Tuned setup")
 
 # Load and plot ascent test results
 f_name = "/data/MAV_ascent_test.npz"
@@ -81,8 +81,8 @@ dep_vars = saved_results["dep_vars"]
 altitudes = dep_vars[:, 1]
 masses = states[:, -1]
 idx_crop = np.where(times >= 13*60)[0][0]
-ax1.plot(times/60, altitudes/1e3, label="Variable step test", linestyle="dotted")
-ax2.plot(times[:idx_crop]/60, masses[:idx_crop], label="Variable step test", linestyle="dotted")
+ax1.plot(times/60, altitudes/1e3, label="Guessed setup", linestyle="dotted")
+ax2.plot(times[:idx_crop]/60, masses[:idx_crop], label="Guessed setup", linestyle="dotted")
 
 # Prettify plot
 ax1.set_xlabel("Time [min]")
@@ -94,4 +94,4 @@ ax2.legend()
 ax1.grid()
 ax2.grid()
 plt.tight_layout()
-plt.show()
+plt.savefig(sys.path[0]+"/plots/setup/benchmark_vs_test.pdf")

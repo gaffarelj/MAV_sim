@@ -1,6 +1,7 @@
 import numpy as np
 from matplotlib import pyplot as plt
 from scipy import interpolate, optimize
+import sys
 
 # Atmospheric conditions
 hs =   [100, 125, 150, 175, 200, 225, 250, 275, 300, 350, 400, 450, 500]
@@ -31,16 +32,17 @@ CDs = [1.5986, 1.7730, 1.7659, 1.7397, 1.7166, 1.7022, 1.6930, 1.6871, 1.6843, 1
 if True:
     # Quadratic spline interpolation
     cs = interpolate.interp1d(hs, CDs, kind="quadratic", bounds_error=False, fill_value="extrapolate")
-    altitudes = np.arange(75, 600, 0.1)
+    altitudes = np.arange(85, 550, 0.1)
     CDs_interp = [cs(h) for h in altitudes]
 
+    plt.figure(figsize=(9, 3.5))
     plt.scatter(hs, CDs, label="DSMC coefficients")
     plt.plot(altitudes, CDs_interp, color="orange", label="Quadratic spline interpolation")
     plt.xlabel("Altitude [km]"), plt.ylabel("Drag coefficient [-]")
     plt.grid()
     plt.tight_layout()
     plt.legend()
-    plt.show()
+    plt.savefig(sys.path[0] + "/../plots/DSMC_CD_altitude.pdf")
 
 if False:
     # Quadratic interpolation

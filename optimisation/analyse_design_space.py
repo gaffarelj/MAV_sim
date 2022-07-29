@@ -17,9 +17,9 @@ import pandas as pd
 import seaborn as sns
 
 # Parameters
-plot_trajectories = True
+plot_trajectories = False
 analyse_correlation = False
-get_initial_population = False
+get_initial_population = True
 pareto_fronts = False
 
 # Tudatpy imports
@@ -214,7 +214,7 @@ if analyse_correlation:
             plt.savefig(sys.path[0]+"/plots/optimisation/design_space_exploration/%s_vs_%s_dvs.pdf"%(objective, dv_used))
 
 if get_initial_population:
-    N = 48
+    N = 72
     samples_weights = {
         "init_angle_only": 2,
         "TVC_only": 1,

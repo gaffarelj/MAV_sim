@@ -24,11 +24,12 @@ from thrust.models.multi_fin import multi_fin_SRM
 from thrust.models.spherical import spherical_SRM
 from thrust.solid_thrust_multi_stage import SRM_thrust_rk4 as SRM_thrust
 
-fig1 = plt.figure(figsize=(9,5))
-fig2 = plt.figure(figsize=(9,5))
-fig3 = plt.figure(figsize=(9,5))
-fig4 = plt.figure(figsize=(9,5))
+fig1 = plt.figure(figsize=(9,4))
+fig2 = plt.figure(figsize=(9,3.5))
+fig3 = plt.figure(figsize=(9,3.5))
+fig4 = plt.figure(figsize=(9,3.5))
 base_states = None
+base_dep_vars = None
 base_label = None
 propagators = [
     propagation_setup.propagator.cowell,
@@ -95,7 +96,7 @@ for i_prop, propagator in enumerate(propagators):
             add_sun=True,
             use_new_coeffs=True
         )
-        MAV_ascent.create_accelerations(use_cpp=(stage==1), better_precision=True, thrust_fname=glob.glob(sys.path[0]+"/data/best_integrator_dt/thrust_%i_dt_*.npz"%stage)[0])
+        MAV_ascent.create_accelerations(use_cpp=(stage==1), better_precision=False, thrust_fname=glob.glob(sys.path[0]+"/data/best_integrator_dt/thrust_%i_dt_*.npz"%stage)[0])
         guidance_object = ascent_framework.FakeAeroGuidance()
         environment_setup.set_aerodynamic_guidance(guidance_object, MAV_ascent.current_body, silence_warnings=True)
         MAV_ascent.create_initial_state()
@@ -103,7 +104,7 @@ for i_prop, propagator in enumerate(propagators):
         MAV_ascent.dependent_variables_to_save.append(propagation_setup.dependent_variable.keplerian_state(MAV_ascent.current_name, "Mars"))
         MAV_ascent.create_termination_settings(end_time=160*60, exact_time=True)
         MAV_ascent.create_propagator_settings(propagator_type=propagator)
-        MAV_ascent.create_integrator_settings(better_accuracy=True)
+        MAV_ascent.create_integrator_settings(better_accuracy=False)
         if stage == 1:
             print("Running with propagator:", propagators_labels[i_prop])
         times, states, dep_vars = MAV_ascent.run_simulation()
@@ -129,35 +130,47 @@ for i_prop, propagator in enumerate(propagators):
         states = np.concatenate((stage_res[0][1], stage_res[1][1]))
         dep_vars = np.concatenate((stage_res[0][2], stage_res[1][2]))
 
-    # states_dict = {}
-    # for t, state, dep_var in zip(times, states, dep_vars):
-    #     if np.fabs(t-t_sep) > 60:
-    #         states_dict[t] = state
-    #         dep_vars_dict[t] = dep_var
-    # if base_states is None:
-    #     base_states = states_dict
-    #     base_dep_vars = dep_vars_dict
-    #     base_label = propagators_labels[i_prop]
-    # else:
-    # t0, tend = 60, 157*60
-    # diff_times = np.arange(t0, tend, 0.1)
-    # dep_vars_diff = util.compare_results(base_states, states_dict, diff_times)
-    # dep_vars_diff_array = util.result2array(dep_vars_diff)
-    # label = "%s (vs %s)" % (propagators_labels[i_prop], base_label)
-    eccentricities = dep_vars[:,1]
-    inclinations = np.rad2deg(dep_vars[:,2])
-    positions = np.linalg.norm(states[:,:3]-states[0,:3], axis=1)
-    angu_mom = np.cross(states[:,:3], states[:,3:6])
-    angu_mom_norm = np.linalg.norm(angu_mom, axis=1)
-    print("Final t=%.2f min, e=%.2f, i=%.2f deg, pos=%.2e m" % (times[-1]/60, eccentricities[-1], inclinations[-1], positions[-1]))
-    plt.figure(fig1)
-    plt.plot(times/60, eccentricities, label=propagators_labels[i_prop], linestyle="dashed")
-    plt.figure(fig2)
-    plt.plot(times/60, inclinations, label=propagators_labels[i_prop], linestyle="dashed")
-    plt.figure(fig3)
-    plt.plot(times/60, positions, label=propagators_labels[i_prop], linestyle="dashed")
-    plt.figure(fig4)
-    plt.plot(times/60, angu_mom_norm, label=propagators_labels[i_prop], linestyle="dashed")
+    label = propagators_labels[i_prop]
+
+    states_dict = {}
+    dep_vars_dict = {}
+    init_state = None
+    for t, state, dep_var in zip(times, states, dep_vars):
+        if init_state is None:
+            init_state = state
+        elif np.fabs(t-t_sep) > 60:
+            states_dict[t] = [np.linalg.norm(state[:3]-init_state[:3])]
+            dep_vars_dict[t] = dep_var
+    if base_states is None:
+        base_states = states_dict
+        base_dep_vars = dep_vars_dict
+        base_label = propagators_labels[i_prop]
+    else:
+        t0, tend = 60, 157*60
+        diff_times = np.arange(t0, tend, 0.1)
+        dep_vars_diff = util.compare_results(base_dep_vars, dep_vars_dict, diff_times)
+        dep_vars_diff_array = util.result2array(dep_vars_diff)
+        dep_vars = dep_vars_diff_array[:,1:]
+        states_diff = util.compare_results(base_states, states_dict, diff_times)
+        states_diff_array = util.result2array(states_diff)
+        states = states_diff_array[:,1:]
+        label = "%s (vs %s)" % (propagators_labels[i_prop], base_label)
+        eccentricities = dep_vars[:,1]
+        inclinations = np.rad2deg(dep_vars[:,2])
+        # positions = np.linalg.norm(states[:,:3]-states[0,:3], axis=1)
+        positions = np.fabs(states[:,0])
+        # angu_mom = np.cross(states[:,:3], states[:,3:6])
+        # angu_mom_norm = np.linalg.norm(angu_mom, axis=1)
+        # diff_times = times
+        print("Final t=%.5f min, e=%.5f, i=%.5f deg, pos=%.5e m" % (times[-1]/60, eccentricities[-1], inclinations[-1], positions[-1]))
+        plt.figure(fig1)
+        plt.plot(diff_times/60, eccentricities, label=label, linestyle="dashed")
+        plt.figure(fig2)
+        plt.plot(diff_times/60, inclinations, label=label, linestyle="dashed")
+        plt.figure(fig3)
+        plt.plot(diff_times/60, positions/1e3, label=label, linestyle="dashed")
+        # plt.figure(fig4)
+        # plt.plot(diff_times/60, angu_mom_norm, label=label, linestyle="dashed")
 
 
 plt.figure(fig1)
@@ -180,9 +193,10 @@ plt.savefig(sys.path[0]+"/plots/setup/propagator_i.pdf")
 
 plt.figure(fig3)
 plt.xlabel("Time [min]")
-plt.ylabel("$r(t) - r(0)$ [m]")
+plt.ylabel("Error in position [m]")
 plt.grid()
 plt.yscale("log")
+# plt.ylim(1e5, 1e7)
 plt.legend(loc="lower right")
 plt.tight_layout()
 plt.savefig(sys.path[0]+"/plots/setup/propagator_pos.pdf")
@@ -194,7 +208,7 @@ plt.figure(fig4)
 # plt.hlines(circ_angu_mom, -1e3, 1e3, colors="black", linestyles="dashed")
 # plt.xlim(xlims)
 plt.xlabel("Time [min]")
-plt.ylabel("Angular momentum [m/s2]")
+plt.ylabel("Angular momentum [m/s$^2$]")
 plt.grid()
 plt.yscale("log")
 plt.legend(loc="lower right")

@@ -1,5 +1,6 @@
 from matplotlib import pyplot as plt
 import numpy as np
+import sys
 
 
 use_grav_turn = True
@@ -75,6 +76,7 @@ for phase in ["1", "coasting", "2"]:
         # Compute burn time
         try:
                 t_b_T = c_eff/g_0/psi_0 * (1-1/Lambda)
+                print(phase, ": t_b_T =", t_b_T, "s")
                 m_dt = psi_0 * g_0 / c_eff
                 mdot = F_T / c_eff
         except ZeroDivisionError:
@@ -138,23 +140,24 @@ for phase in ["1", "coasting", "2"]:
         dV_thrust = tot_dV+grav_V_loss+drag_V_loss
 
         print("Phase is", phase)
+        if phase == "coasting":
+                print("Total coasting time:", time-t0, "s")
         print("Total dV of %.2f m/s (thrust of %.2f m/s, gravity loss of %.2f m/s, drag loss of %.2e m/s)" % (tot_dV, dV_thrust, grav_V_loss, drag_V_loss))
         print("Final altitude of %.5f km" % (Z_s[-1]/1e3))
         print("Final velocity of %.3f m/s" % V_s[-1])
         print("Final gamma of %.3f deg" % np.rad2deg(gamma))
 
 ### Plot the results
-plt.figure(figsize=(12,5))
+plt.figure(figsize=(9,3.5))
 plt.subplot(121)
 plt.plot(np.asarray(time_s), np.asarray(Z_s)/1e3)
 plt.xlabel("Time [s]")
 plt.ylabel("Altitude [km]")
 plt.grid()
-plt.axis('equal')
 plt.subplot(122)
 plt.plot(time_s, V_s)
 plt.xlabel("Time [s]")
 plt.ylabel("Velocity [m/s]")
 plt.grid()
 plt.tight_layout()
-plt.show()
+plt.savefig(sys.path[0]+"/../plots/setup/semi_analytical.pdf")

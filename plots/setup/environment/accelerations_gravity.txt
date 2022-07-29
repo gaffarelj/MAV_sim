@@ -1,5 +1,6 @@
 For Point Mass (vs SH D/O 14), final difference of 1.21e+05 m and 1.10e+02 m/s
 For SH D/O 2 (vs SH D/O 14), final difference of 7.23e+03 m and 6.88e+00 m/s
 For SH D/O 4 (vs SH D/O 14), final difference of 1.10e+03 m and 1.16e+00 m/s
+For SH D/O 6 (vs SH D/O 14), final difference of 5.74e+02 m and 5.61e+00 m/s
 For SH D/O 8 (vs SH D/O 14), final difference of 1.85e+02 m and 1.30e-01 m/s
 For SH D/O 10 (vs SH D/O 14), final difference of 1.55e+02 m and 1.33e-01 m/s

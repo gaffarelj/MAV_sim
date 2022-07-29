@@ -98,18 +98,22 @@ for model_name, SRM_model in zip(model_names, SRM_models):
     times_OM, p_c_OM, magnitudes_OM, mass_OM, mdot_OM, b_OM, p_e_OM = load_data(model_name)
 
     # Compile validation and simulation data
-    names = ["Thrust [N]", "Propellant mass [kg]", "Regression depth [m]", "Chamber pressure [MPa]"]
-    values = [magnitudes, M_p_s, b_s, p_c_s]
-    values_OM = [magnitudes_OM, mass_OM, b_OM, p_c_OM]
+    names = ["Thrust [N]", "Propellant mass [kg]"]#, "Regression depth [m]", "Chamber pressure [MPa]"]
+    magnitudes = [0 if magnitude < 0 else magnitude for magnitude in magnitudes]
+    p_c_s[-1] = 0
+    values = [magnitudes, M_p_s]#, b_s, p_c_s]
+    values_OM = [magnitudes_OM, mass_OM]#, b_OM, p_c_OM]
 
     # Plot
-    fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(10,8))
-    axes = [ax1, ax2, ax3, ax4]
-    fig.suptitle("%s geometry" % model_name.replace("_", " ").capitalize())
+    # fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(10,8))
+    fig, ((ax1), (ax2)) = plt.subplots(1, 2, figsize=(9,3.5))
+    # axes = [ax1, ax2, ax3, ax4]
+    axes = [ax1, ax2]
+    # fig.suptitle("%s geometry" % model_name.replace("_", " ").capitalize())
     for name, value, value_OM, ax in zip(names, values, values_OM, axes):
-        ax.plot(times, value, label="Simulated", linestyle="dotted")
+        ax.plot(times, value, label="Simulation", linestyle="dotted")
         ax.plot(times_OM, value_OM, label="openMotor", linestyle="dotted")
         ax.set_xlabel("Time [s]"), ax.set_ylabel(name)
         ax.grid(), ax.legend()
     plt.tight_layout()
-    plt.show()
+    plt.savefig(sys.path[0] + "/plots/%s_geometry_verif_cropped.pdf" % model_name)

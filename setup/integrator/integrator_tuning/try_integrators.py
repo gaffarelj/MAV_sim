@@ -24,7 +24,7 @@ if __name__ == "__main__":
     from setup.integrator.integrator_tuning.run_specific_integrator import run_ascent
 
     # Parameters
-    method = "variable" # "variable" or "fixed"
+    method = "fixed" # "variable" or "fixed"
     dts = sorted(np.logspace(-3, -0.5, num=10), reverse=True)
     tolerances = sorted(np.logspace(-18, -2, num=20), reverse=True)
     allowed_errors = [5e3, 5]
@@ -82,7 +82,7 @@ if __name__ == "__main__":
     db_col = "dt" if method == "fixed" else "tolerance"
 
     inputs = []
-    N_workers = 24
+    N_workers = 44
 
     #while True:
     for i_inp, inp in enumerate(iterate_input):

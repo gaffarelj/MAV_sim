@@ -92,6 +92,15 @@ for i, (name, to_plot) in enumerate(geometries_to_plot.items()):
     if to_plot:
         SRM_geometry = geometries[i]
 
+        SRM_geometry.plot_geometry(b=0, final_b=1, add_title=False)
+        plt.tick_params(top=False, bottom=False, left=False, right=False, labelleft=False, labelbottom=False)
+        plt.grid(False)
+        plt.box(False)
+        plt.savefig(sys.path[0] + "/thrust/burn_visu/%s.png" % name, dpi=300)
+        plt.close()
+        input("Saved %s" % name)
+        continue
+
         # Compute the thrust over time
         print("Computing thrust over time for the %s SRM geometry..." % name.replace("_", " "))
         SRM_thrust_model = SRM_thrust(SRM_geometry)

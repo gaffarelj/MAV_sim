@@ -1,4 +1,5 @@
 import numpy as np
+import sys
 
 class anchor_SRM:
 
@@ -241,22 +242,21 @@ if __name__ == "__main__":
 
     P_segments = np.array(P_segments).T
 
+    # Set matplotlib font size
+    plt.rcParams.update({'font.size': 10})
     # Plot the burning Perimeter as a function of the burned distance
-    fig = plt.subplots(figsize=(8, 4))
-    plt.plot(b_s, P_s)
-    plt.xlim(0, 0.38), plt.ylim(0, 13)
-    plt.xlabel("Burned distance [m]"), plt.ylabel("Burning Perimeter [m]")
-    plt.grid()
-    plt.tight_layout()
-    plt.show()
+    fig, ((ax1, ax2)) = plt.subplots(2, 1, figsize=(5.5,5))
+    ax1.plot(b_s, P_s)
+    ax1.set_xlim(0, 0.38), ax1.set_ylim(0, 13)
+    ax1.set_xlabel("Burned distance [m]"), ax1.set_ylabel("Burning Perimeter [m]")
+    ax1.grid()
 
     # Plot the burning perimeter segments as a function of the burned distance
-    fig = plt.subplots(figsize=(8, 4))
     for i, perimeters in enumerate(P_segments):
-        plt.plot(b_s, perimeters, label="Segment %i" % i)
-    plt.xlabel("Burned distance [m]"), plt.ylabel("Burning Perimeter [m]")
-    plt.xlim(0, 0.36), plt.ylim(0, 0.8)
-    plt.grid()
-    plt.legend()
+        ax2.plot(b_s, perimeters, label="$P_%i$" % (i+1))
+    ax2.set_xlabel("Burned distance [m]"), ax2.set_ylabel("Burning Perimeter [m]")
+    ax2.set_xlim(0, 0.36), ax2.set_ylim(0, 0.8)
+    ax2.grid()
+    ax2.legend()
     plt.tight_layout()
-    plt.show()
+    plt.savefig(sys.path[0] + "/../../plots/anchor_P_verif.pdf")

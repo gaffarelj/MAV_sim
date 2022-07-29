@@ -202,6 +202,20 @@ if plot_best:
         [df_best["TVC_z_%i"%i] for i in range(1, 6)],
         0
     ]
+    ax = SRM_stage_1.plot_geometry(add_title=False)
+    plt.tight_layout()
+    ax.tick_params(top=False, bottom=False, left=False, right=False, labelleft=False, labelbottom=False)
+    ax.grid(False)
+    ax.set(frame_on=False)
+    plt.savefig(sys.path[0]+"/plots/optimisation/optimum/SRM1.pdf")
+    plt.close()
+    ax = SRM_stage_2.plot_geometry(add_title=False)
+    plt.tight_layout()
+    ax.tick_params(top=False, bottom=False, left=False, right=False, labelleft=False, labelbottom=False)
+    ax.grid(False)
+    ax.set(frame_on=False)
+    plt.savefig(sys.path[0]+"/plots/optimisation/optimum/SRM2.pdf")
+    plt.close()
     ascent_model = MAV_ascent(
         launch_epoch = 0,
         launch_lat = np.deg2rad(18.85),
@@ -226,6 +240,8 @@ if plot_best:
         environment_setup.set_aerodynamic_guidance(guidance_object, ascent_model.current_body, silence_warnings=True)
         ascent_model.create_initial_state()
         ascent_model.create_dependent_variables_to_save()
+        ascent_model.dependent_variables_to_save.append(propagation_setup.dependent_variable.geodetic_latitude(ascent_model.current_name, "Mars"))
+        ascent_model.dependent_variables_to_save.append(propagation_setup.dependent_variable.longitude(ascent_model.current_name, "Mars"))
         ascent_model.create_termination_settings(end_time=160*60, cpu_time_termination=30)
         ascent_model.create_propagator_settings()
         ascent_model.create_integrator_settings()
@@ -268,10 +284,39 @@ if plot_best:
     try:
         idx_crop = np.where(times >= t_sep/60+3)[0][0]
         idx_crop_zoom = np.where(times >= 9.5)[0][0]
+        idx_crop_no_margin = np.where(times >= t_sep/60+t_b_2/60)[0][0]
     except IndexError:
         idx_crop = -1
 
-    plt.figure(figsize=(9, 5))
+    latitudes = dep_vars[:,-2]
+    longitudes = dep_vars[:,-1]
+    R = 3389.5
+    ground_distance = R * (np.sin(longitudes - longitudes[0]) + np.cos(latitudes - latitudes[0]))
+    ground_distance = ground_distance - ground_distance[0]
+
+
+    # fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(9, 7))
+    # ax1.plot(times, altitudes/1e3)
+    # ax1.set_xlabel("Time [min]")
+    # ax1.set_ylabel("Altitude [km]")
+    # ax1.grid()
+    # ax2.plot(times, airspeeds)
+    # ax2.set_xlabel("Time [min]")
+    # ax2.set_ylabel("Airspeed [m/s]")
+    # ax2.grid()
+    # ax3.plot(ground_distance[:idx_crop_no_margin], altitudes[:idx_crop_no_margin]/1e3)
+    # ax3.set_xlabel("Ground distance [km]")
+    # ax3.set_ylabel("Altitude [km]")
+    # ax3.set_aspect("equal")
+    # ax3.grid()
+    # ax4.plot(times[:idx_crop], mass[:idx_crop])
+    # ax4.set_xlabel("Time [min]")
+    # ax4.set_ylabel("Mass [kg]")
+    # ax4.grid()
+    # plt.tight_layout()
+    # plt.savefig(sys.path[0]+"/plots/optimisation/optimum/optimum.pdf")
+
+    plt.figure(figsize=(4, 3))
     plt.plot(times, altitudes/1e3)
     plt.grid()
     plt.xlabel("Time since launch [min]")
@@ -279,15 +324,33 @@ if plot_best:
     plt.tight_layout()
     plt.savefig(sys.path[0]+"/plots/optimisation/optimum/altitude.pdf")
 
-    plt.figure(figsize=(9, 5))
-    plt.plot(times[:idx_crop_zoom], altitudes[:idx_crop_zoom]/1e3)
+    plt.figure(figsize=(9, 3.5))
+    plt.plot(ground_distance[:idx_crop_no_margin], altitudes[:idx_crop_no_margin]/1e3)
     plt.grid()
-    plt.xlabel("Time since launch [min]")
+    plt.xlabel("Ground distance [km]")
     plt.ylabel("Altitude [km]")
+    plt.axis("equal")
     plt.tight_layout()
-    plt.savefig(sys.path[0]+"/plots/optimisation/optimum/altitude_zoomed.pdf")
+    plt.savefig(sys.path[0]+"/plots/optimisation/optimum/2D.pdf")
 
-    plt.figure(figsize=(9, 5))
+    # fig = plt.figure(figsize=(7, 6))
+    # ax = fig.add_subplot(111, projection="3d")
+    # ax.scatter(states[:,0], states[:,1], states[:,2])
+    # ax.set_xlabel("X [km]")
+    # ax.set_ylabel("Y [km]")
+    # ax.set_zlabel("Z [km]")
+    # plt.tight_layout()
+    # plt.savefig(sys.path[0]+"/plots/optimisation/optimum/3D.pdf")
+
+    # plt.figure(figsize=(9, 5))
+    # plt.plot(times[:idx_crop_zoom], altitudes[:idx_crop_zoom]/1e3)
+    # plt.grid()
+    # plt.xlabel("Time since launch [min]")
+    # plt.ylabel("Altitude [km]")
+    # plt.tight_layout()
+    # plt.savefig(sys.path[0]+"/plots/optimisation/optimum/altitude_zoomed.pdf")
+
+    plt.figure(figsize=(4, 3))
     plt.plot(times, airspeeds)
     plt.grid()
     plt.xlabel("Time since launch [min]")
@@ -295,7 +358,7 @@ if plot_best:
     plt.tight_layout()
     plt.savefig(sys.path[0]+"/plots/optimisation/optimum/airspeed.pdf")
 
-    plt.figure(figsize=(9, 5))
+    plt.figure(figsize=(4, 3))
     plt.plot(times[:idx_crop], mass[:idx_crop])
     plt.grid()
     plt.xlabel("Time since launch [min]")
@@ -303,18 +366,26 @@ if plot_best:
     plt.tight_layout()
     plt.savefig(sys.path[0]+"/plots/optimisation/optimum/mass.pdf")
 
-    plt.figure(figsize=(9, 5))
-    plt.plot(times[:idx_crop], tot_accs[:idx_crop], label="Total", linestyle="dotted", color="black")
-    plt.plot(times[:idx_crop], a_SH[:idx_crop], label="SH D/O 4")
-    plt.plot(times[:idx_crop], a_thrust[:idx_crop], label="Thrust")
-    plt.plot(times[:idx_crop], a_aero[:idx_crop], label="Aerodynamic")
+    plt.figure(figsize=(4, 3))
+    plt.plot(times[:idx_crop], flight_path_angles[:idx_crop])
     plt.grid()
     plt.xlabel("Time since launch [min]")
-    plt.ylabel("Acceleration [m/s$^2$]")
-    plt.legend()
-    plt.yscale("symlog", linthresh=1)
+    plt.ylabel("Flight path angle [deg]")
     plt.tight_layout()
-    plt.savefig(sys.path[0]+"/plots/optimisation/optimum/accelerations.pdf")
+    plt.savefig(sys.path[0]+"/plots/optimisation/optimum/flight_path.pdf")
+
+    # plt.figure(figsize=(9, 5))
+    # plt.plot(times[:idx_crop], tot_accs[:idx_crop], label="Total", linestyle="dotted", color="black")
+    # plt.plot(times[:idx_crop], a_SH[:idx_crop], label="SH D/O 4")
+    # plt.plot(times[:idx_crop], a_thrust[:idx_crop], label="Thrust")
+    # plt.plot(times[:idx_crop], a_aero[:idx_crop], label="Aerodynamic")
+    # plt.grid()
+    # plt.xlabel("Time since launch [min]")
+    # plt.ylabel("Acceleration [m/s$^2$]")
+    # plt.legend()
+    # # plt.yscale("symlog", linthresh=1)
+    # plt.tight_layout()
+    # plt.savefig(sys.path[0]+"/plots/optimisation/optimum/accelerations.pdf")
 
 con.close()
 
