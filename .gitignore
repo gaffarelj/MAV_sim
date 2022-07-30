@@ -367,4 +367,4 @@ thrust/models/CPP/SRM_cpp.so
 optimisation/sim_results/*.npz
 plots/optimisation/tuning/*/*.pdf
 data/optimisation/SA/*.npz
-plots/optimisation/SA/*.pdf
+plots/optimisation/SA/decay/*.pdf

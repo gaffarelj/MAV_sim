@@ -225,7 +225,7 @@ if __name__ == "__main__":
             plt.ylabel("Inclination [deg]")
             plt.grid()
             plt.tight_layout()
-            plt.savefig(sys.path[0]+"/plots/optimisation/SA/inclination_%s.pdf"%"_".join(file.split("/")[-1].split(".")[0].split("_")[-2:]))
+            plt.savefig(sys.path[0]+"/plots/optimisation/SA/decay/inclination_%s.pdf"%"_".join(file.split("/")[-1].split(".")[0].split("_")[-2:]))
             plt.close()
 
             plt.figure(figsize=(9,5))
@@ -238,7 +238,7 @@ if __name__ == "__main__":
             plt.xlim(-0.5, times[-1]+0.5)
             plt.grid()
             plt.tight_layout()
-            plt.savefig(sys.path[0]+"/plots/optimisation/SA/h_history_%s.pdf"%"_".join(file.split("/")[-1].split(".")[0].split("_")[-2:]))
+            plt.savefig(sys.path[0]+"/plots/optimisation/SA/decay/h_history_%s.pdf"%"_".join(file.split("/")[-1].split(".")[0].split("_")[-2:]))
             plt.close()
             
             _d = file.split(".")[0].split("_")
@@ -254,5 +254,5 @@ if __name__ == "__main__":
             plt.ylabel("Decay time [days]")
             plt.grid()
             plt.tight_layout()
-            plt.savefig(sys.path[0]+"/plots/optimisation/SA/%s.pdf"%fname)
+            plt.savefig(sys.path[0]+"/plots/optimisation/SA/decay/%s.pdf"%fname)
             plt.close()
