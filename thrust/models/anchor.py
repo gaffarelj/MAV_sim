@@ -204,6 +204,19 @@ class anchor_SRM:
         # Return the axis used
         return ax
 
+    def get_cpp_counterpart(self):
+        from thrust.models.CPP.SRM_cpp import SRM_geometry
+        return SRM_geometry(
+            type="anchor",
+            R_o=self.R_o,
+            R_i=self.R_i,
+            N_a=self.N_a,
+            w=self.w,
+            r_f=self.r_f,
+            delta_s=self.delta_s,
+            L=self.L
+        )
+
     def __str__(self):
         return """Anchor SRM geometry with
         $L = %.3f$ [m], $R_o = %.3f$ [m], $R_i = %.3f$ [m], $N_a = %i$ [-], $w = %.3f$ [m], $r_f = %.3f$ [m], $\delta_s = %.3f$ [m]""" \

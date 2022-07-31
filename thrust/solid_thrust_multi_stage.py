@@ -137,14 +137,10 @@ class SRM_thrust_rk4:
         if filename is None:
             if use_cpp:
                 from thrust.models.CPP.SRM_cpp import run_sim
+                cpp_geometry_model = self.geometry_model.get_cpp_counterpart()
                 # print("Running C++ thrust sim")
                 self.saved_burn_times, self.saved_magnitudes, self.saved_m_dot_s = run_sim(
-                    self.geometry_model.R_o,
-                    self.geometry_model.R_i,
-                    self.geometry_model.N_f,
-                    self.geometry_model.w_f,
-                    self.geometry_model.L_f,
-                    self.geometry_model.L,
+                    cpp_geometry_model,
                     dt,
                     timeout=30.0
                 )
@@ -168,12 +164,15 @@ class SRM_thrust_rk4:
             thrust_results = np.load(filename)
             # print("Taking thrust from", filename)
             self.saved_burn_times, self.saved_magnitudes, masses = list(thrust_results["times"]), list(thrust_results["magnitudes"]), list(thrust_results["masses"])
-            mass_diff = np.asarray(np.diff(masses))
-            time_diff = np.asarray(np.diff(self.saved_burn_times))
-            self.saved_m_dot_s = list(mass_diff/time_diff)
-            self.saved_m_dot_s.append(self.saved_m_dot_s[-1])
-            self.saved_m_dot_s.insert(0, 0)
-            self.saved_burn_times.insert(0, 0), self.saved_magnitudes.insert(0, 0)
+            if "opti" in filename:
+                self.saved_m_dot_s = masses
+            else:
+                mass_diff = np.asarray(np.diff(masses))
+                time_diff = np.asarray(np.diff(self.saved_burn_times))
+                self.saved_m_dot_s = list(mass_diff/time_diff)
+                self.saved_m_dot_s.append(self.saved_m_dot_s[-1])
+                self.saved_m_dot_s.insert(0, 0)
+                self.saved_burn_times.insert(0, 0), self.saved_magnitudes.insert(0, 0)
 
         self.saved_burn_times.insert(0, 0), self.saved_magnitudes.insert(0, 0), self.saved_m_dot_s.insert(0, 0)
         

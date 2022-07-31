@@ -112,6 +112,18 @@ class multi_fin_SRM:
         # Return the axis used
         return ax
 
+    def get_cpp_counterpart(self):
+        from thrust.models.CPP.SRM_cpp import SRM_geometry
+        return SRM_geometry(
+            type="multi fin",
+            R_o=self.R_o,
+            R_i=self.R_i,
+            N_f=self.N_f,
+            w_f=self.w_f,
+            L_f=self.L_f,
+            L=self.L
+        )
+
     def __str__(self):
         return """Multi-fin SRM geometry with
         $L = %.3f$ [m], $R_o = %.3f$ [m], $R_i = %.3f$ [m], $N_f = %i$ [-], $w_f = %.3f$ [m], $L_f = %.3f$ [m]""" \

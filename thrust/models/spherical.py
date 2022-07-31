@@ -88,6 +88,14 @@ class spherical_SRM:
         # Return the axis used
         return ax
 
+    def get_cpp_counterpart(self):
+        from thrust.models.CPP.SRM_cpp import SRM_geometry
+        return SRM_geometry(
+            type="spherical",
+            R_o=self.R_o,
+            R_i=self.R_i
+        )
+
     def __str__(self):
         return """Spherical SRM geometry with
         $R_o = %.3f$ [m], $R_i = %.3f$ [m]""" \
