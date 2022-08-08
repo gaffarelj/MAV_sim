@@ -33,7 +33,14 @@ Design variables of each SRM geometric model:
     - w_f_frac: fin thickness = w_f_frac * 2*pi*(R_i-L_f)/N_f [m] ~ [0.35, 0.9]
 
 * Anchor:
-    - TODO
+    - L: length [m] ~ [0.3, 1.25]
+    - R_o: outer radius [m] ~ [0.1, 0.285]
+    - R_i_frac: inner radius = R_i_frac * R_o [-] ~ [0.2, 0.9]
+    - N_a: number of anchors [-] ~ [2-15]
+    - w_frac: fin spacing = w_frac * (R_o-R_i)/3 [-] ~ [0.1, 0.9]
+    - r_f_frac: fillet radius = r_f_frac * (R_o-3*w-R_i)/2 [-] ~ [0.1, 0.9]
+    - delta_s_frac: fin thickness = delta_s_frac * 2*R_i*sin(pi/N_a) [-] ~ [0.1, 0.9]
+    + condition f(delta_s, w, R_i, r_f, N_a)
 """
 
 import sys
@@ -43,18 +50,21 @@ while sys.path[0].split("/")[-1] != "MAV_sim":
     sys.path.insert(0,"/".join(sys.path[0].split("/")[:-1]))
 import numpy as np
 from matplotlib import pyplot as plt
+from scipy.optimize import fsolve
 
 from thrust.models.multi_fin import multi_fin_SRM
 from thrust.models.spherical import spherical_SRM
 from thrust.models.tubular import tubular_SRM
 from thrust.models.rod_and_tube import rod_and_tube_SRM
+from thrust.models.anchor import anchor_SRM
 
 MC_runs = 0
 fact_run = True
 test_multi_fin_dep_vars = False
 test_spherical_dep_vars = False
 test_tubular_dep_vars = False
-test_rod_and_tube_dep_vars = True
+test_rod_and_tube_dep_vars = False
+test_anchor_dep_vars = True
 
 operators_to_run = {
     "min": min,
@@ -212,4 +222,48 @@ if test_rod_and_tube_dep_vars:
                     ax.set_title("$%s$ = %.3f" % (des_vars_names[i], des_var[i]), fontsize=18, y=0.92)
         plt.tight_layout()
         plt.savefig(sys.path[0]+"/optimisation/des_vars_verif/factorial/rod_and_tube_SRM.pdf")
+        plt.close()
+        
+if test_anchor_dep_vars:
+    des_vars_range = [
+        [0.3, 0.05, 0.15, 0.3, 0.05, 0.1, 2],
+        [1.25, 0.285, 0.6, 0.85, 0.95, 0.75, 6]
+    ]
+    base_vals = [1.0, 0.15, 0.25, 0.55, 0.25, 0.4, 3]
+    des_vars_names = ["L", "R_o", "R_{i_{frac}}", "w_{frac}", "r_{f_{frac}}", "\delta_{s_{frac}}", "N_a"]
+    des_vars_type = [float, float, float, float, float, float, int]
+    if fact_run:
+        fig, axes = plt.subplots(len(des_vars_range[0])-2, len(operators_to_run.keys()), figsize=(15, 14), subplot_kw=dict(projection='polar'))
+        for i, des_var_range in enumerate(np.asarray(des_vars_range).T):
+            if i not in [0, 1]: # skip SRM length (can be whatever)
+                print(i, des_var_range)
+                for j, (op_name, op) in enumerate(operators_to_run.items()):
+
+                    des_var = base_vals.copy()
+                    des_var[i] = des_vars_type[i](op(des_var_range))
+                    print(op_name, des_var)
+
+                    L, R_o_1, R_i_frac_1, w_frac, r_f_frac, delta_s_frac, N_a = des_var
+                    N_a = int(N_a)
+                    R_i_1 = R_i_frac_1 * R_o_1
+                    w = w_frac * (R_o_1 - R_i_1) / 3
+                    r_f = r_f_frac * (R_o_1 - 3 * w - R_i_1) / 2
+                    delta_s = delta_s_frac * 2 * R_i_1 * np.sin(np.pi/N_a)
+                    if np.arcsin( (delta_s + 2 * w)/(2 * (R_i_1 + w)) ) + np.arcsin( (r_f + w)/(R_i_1 + 2 * w + r_f) ) >= np.pi/N_a:
+                        print("Value for R_i is:", R_i_1)
+                        R_i_1 = fsolve(lambda x: np.arcsin( (delta_s + 2 * w)/(2 * (x + w)) ) + np.arcsin( (r_f + w)/(x + 2 * w + r_f) ) - np.pi/N_a, R_i_1)[0]+1e-5
+                        print("Taking R_i limit value instead:", R_i_1)
+
+                    ax = axes[i-2, j]
+                    try:
+                        anchor_SRM(R_o_1, R_i_1, N_a, w, r_f, delta_s, L, run_checks=True).plot_geometry(ax_in=ax)
+                    except ValueError as e:
+                        print(e)
+                        continue
+                    ax.tick_params(top=False, bottom=False, left=False, right=False, labelleft=False, labelbottom=False)
+                    ax.grid(False)
+                    ax.set(frame_on=False)
+                    ax.set_title("$%s$ = %.3f" % (des_vars_names[i], des_var[i]), fontsize=18, y=0.92)
+        plt.tight_layout()
+        plt.savefig(sys.path[0]+"/optimisation/des_vars_verif/factorial/anchor_SRM.pdf")
         plt.close()

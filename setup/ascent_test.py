@@ -15,14 +15,17 @@ from datetime import datetime
 from matplotlib import pyplot as plt
 
 # Tudatpy imports
-from tudatpy.kernel.astro import time_conversion
+# from tudatpy.kernel.astro import time_conversion
 from tudatpy.kernel.numerical_simulation import environment_setup
+from tudatpy.kernel.astro import element_conversion
+from tudatpy.kernel.interface import spice
 
 from setup import ascent_framework
 from thrust.models.multi_fin import multi_fin_SRM
-# from thrust.models.rod_and_tube import rod_and_tube_SRM
-# from thrust.models.anchor import anchor_SRM
+from thrust.models.rod_and_tube import rod_and_tube_SRM
+from thrust.models.anchor import anchor_SRM
 from thrust.models.spherical import spherical_SRM
+from thrust.models.tubular import tubular_SRM
 # from thrust.solid_thrust import SRM_thrust
 from thrust.solid_thrust_multi_stage import SRM_thrust_rk4 as SRM_thrust
 
@@ -30,12 +33,16 @@ use_SRM = True
 
 # Max D=0.57m, most assumed in feasibility study was D=0.51m
 if use_SRM:
-    # SRM_stage_1 = rod_and_tube_SRM(R_o=0.24, R_mid=0.19, R_i=0.075, L=1.05)
-    SRM_stage_1 = multi_fin_SRM(R_o=0.24, R_i=0.175, N_f=20, w_f=0.02, L_f=0.05, L=1.05)
-    # SRM_stage_1 = anchor_SRM(R_o=0.24, R_i=0.165, N_a=4, w=0.015, r_f=0.005, delta_s=0.015, L=1.05)
+    SRM_stage_1 = multi_fin_SRM(R_o=0.24, R_i=0.175, N_f=20, w_f=0.02, L_f=0.05, L=1.15)
+    # SRM_stage_1 = rod_and_tube_SRM(R_o=0.25, R_mid=0.14, R_i=0.05, L=1.05)
+    # SRM_stage_1 = anchor_SRM(R_o=0.26, R_i=0.165, N_a=6, w=0.025, r_f=0.005, delta_s=0.015, L=1.15)
+    # SRM_stage_1 = tubular_SRM(R_o=0.25, R_i=0.16, L=1.15)
     SRM_thrust_model_1 = SRM_thrust(SRM_stage_1, A_t=0.065, epsilon=45)
 
-    SRM_stage_2 = spherical_SRM(R_o=0.165, R_i=0.0915)
+    SRM_stage_2 = spherical_SRM(R_o=0.165, R_i=0.0875) # with multi-fin
+    # SRM_stage_2 = spherical_SRM(R_o=0.19, R_i=0.0915) # with rod and tube
+    # SRM_stage_2 = spherical_SRM(R_o=0.19, R_i=0.0915) # with anchor
+    # SRM_stage_2 = spherical_SRM(R_o=0.19, R_i=0.12) # with tubular
     SRM_thrust_model_2 = SRM_thrust(SRM_stage_2, A_t=0.005, epsilon=73, p_a=0)
     # print("%.2f/207 kg of propellant"%SRM_thrust_model_1.M_p, "%.2f/29 kg of innert"%SRM_thrust_model_1.M_innert)
     # SRM_stage_1.plot_geometry()
@@ -83,14 +90,14 @@ MAV_ascent = ascent_framework.MAV_ascent(
 stage_res = []
 for stage in [1, 2]:
     MAV_ascent.create_bodies(stage=stage)
-    MAV_ascent.create_accelerations()
+    MAV_ascent.create_accelerations(use_cpp=True)#thrust_fname=sys.path[0]+"/data/opti_thrust_%i.npz"%stage
     guidance_object = ascent_framework.FakeAeroGuidance()
     environment_setup.set_aerodynamic_guidance(guidance_object, MAV_ascent.current_body, silence_warnings=True)
     MAV_ascent.create_initial_state()
     MAV_ascent.create_dependent_variables_to_save()
     MAV_ascent.create_termination_settings(end_time=160*60)
     MAV_ascent.create_propagator_settings()
-    MAV_ascent.create_integrator_settings(),#fixed_step=0.1)
+    MAV_ascent.create_integrator_settings(better_accuracy=True),#fixed_step=0.1)
     print("Running the simulation for stage %i" % stage)
     times, states, dep_vars = MAV_ascent.run_simulation()
     stage_res.append([times, states, dep_vars])
@@ -99,12 +106,14 @@ for stage in [1, 2]:
         (stage, (times[-1]-MAV_ascent.launch_epoch)/60, final_h/1e3, dep_vars[-1,5]/1e3, states[-1,-1]))
     if stage == 1:
         t_b_1 = MAV_ascent.thrust.burn_time
+        print("Stage 1 burn time = ", t_b_1)
         t_sep = times[-1]-MAV_ascent.launch_epoch
         idx_sep = len(times)-1
         if final_h < 0:
             break
     else:
         t_b_2 = MAV_ascent.thrust.burn_time
+        print("Stage 2 burn time = ", t_b_2)
 if stage == 1:
     # Extract results from first propagation only if stage 2 was not used
     times = stage_res[0][0]
@@ -137,6 +146,20 @@ velocities = dep_vars[:,17:20]
 full_a_thrust = dep_vars[:,20:23]
 
 print("Mach number ranges from %.2f to %.2f" % (min(mach_numbers), max(mach_numbers)))
+
+final_cartesian_state = states[-1,:-1]
+
+final_keplerian_state = element_conversion.cartesian_to_keplerian(
+    final_cartesian_state,
+    spice.get_body_gravitational_parameter("Mars")
+)
+final_a, final_e, final_i = final_keplerian_state[:3]
+R_Mars = spice.get_average_radius("Mars")
+
+h_peri, h_apo = final_a * (1 - final_e) - R_Mars, final_a * (1 + final_e) - R_Mars
+print("Periapsis altitude = %.2f km, Apoapsis altitude = %.2f km" % (h_peri/1e3, h_apo/1e3))
+
+exit()
 
 try:
     idx_crop = np.where(times >= t_sep/60+3)[0][0]
@@ -215,7 +238,7 @@ ax1.set_xlabel("Time since launch [min]")
 ax1.set_ylabel("Altitude [km]")
 
 # Plot the airspeed history
-ax2.plot(times, mach_numbers)
+ax2.plot(times, airspeeds)
 ax2.grid()
 ax2.set_xlabel("Time since launch [min]")
 ax2.set_ylabel("Airspeed [m/s]")
