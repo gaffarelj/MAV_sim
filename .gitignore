@@ -365,6 +365,8 @@ plots/setup/integrator/benchmark/*/*.pdf
 setup/integrator/integrator_tuning/database *.db
 thrust/models/CPP/SRM_cpp.so
 optimisation/sim_results/*.npz
+optimisation/sim_results/*/*.npz
 plots/optimisation/tuning/*/*.pdf
 data/optimisation/SA/*.npz
 plots/optimisation/SA/decay/*.pdf
+data/opti_*.npz
