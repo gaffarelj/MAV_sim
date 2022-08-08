@@ -207,9 +207,15 @@ public:
     double _p_ratio = -1.0;
 
     SRM_thrust_model(
-        SRM_geometry current_geo
+        SRM_geometry current_geo,
+        double A_t,
+        double epsilon,
+        double p_a
     )
     {
+        _A_t = A_t;
+        _epsilon = epsilon;
+        _p_a = p_a;
         _current_geo = current_geo;
         _A_e = _A_t * _epsilon;
         _Gamma = sqrt(_gamma) * pow((2/(_gamma+1)),((_gamma+1)/(2*(_gamma-1))));
@@ -363,8 +369,8 @@ public:
 
 
 std::tuple<std::vector<double>, std::vector<double>, std::vector<double>> 
-run_sim(SRM_geometry SRM, double dt, double timeout=-1.0) {
-    SRM_thrust_model SRM_thrust = SRM_thrust_model(SRM);
+run_sim(SRM_geometry SRM, double dt, double A_t=0.0665, double epsilon=45, double p_a=650*0.4, double timeout=-1.0) {
+    SRM_thrust_model SRM_thrust = SRM_thrust_model(SRM, A_t, epsilon, p_a);
     return SRM_thrust.sim_full_burn(dt, timeout);
 }
 
@@ -394,6 +400,9 @@ PYBIND11_MODULE(SRM_cpp, m) {
         &run_sim,
         py::arg("SRM_model"),
         py::arg("dt"),
+        py::arg("A_t") = 0.065,
+        py::arg("epsilon") = 45,
+        py::arg("p_a") = 650*0.4,
         py::arg("timeout") = -1.0
     );
 

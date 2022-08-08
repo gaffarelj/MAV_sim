@@ -23,11 +23,15 @@ SRM_models.append(rod_and_tube_SRM(R_o=0.24, R_mid=0.21, R_i=0.175, L=1.05))
 SRM_models.append(multi_fin_SRM(R_o=0.24, R_i=0.175, N_f=20, w_f=0.02, L_f=0.05, L=1.05))
 SRM_models.append(anchor_SRM(R_o=1, R_i=0.25, N_a=3, w=0.2, r_f=0.05, delta_s=0.15, L=3))
 SRM_models.append(spherical_SRM(R_o=0.175, R_i=0.095))
+SRM_models.append(spherical_SRM(R_o=0.186, R_i=0.106))
 
 dt = 1.156191
 
 for SRM_model in SRM_models:
-    SRM_thrust_model_1 = SRM_thrust(SRM_model, A_t=0.065, epsilon=45)
+    if type(SRM_model) == spherical_SRM:
+        SRM_thrust_model_1 = SRM_thrust(SRM_model, A_t=0.005, epsilon=73, p_a=0)
+    else:
+        SRM_thrust_model_1 = SRM_thrust(SRM_model, A_t=0.065, epsilon=45)
 
     mags = []
     for use_cpp in [False, True]:

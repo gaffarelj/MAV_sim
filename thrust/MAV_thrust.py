@@ -25,6 +25,7 @@ class MAV_thrust:
             dt = 2.0e-6 if ascent_model.current_stage == 1 else 1.5e-2
         if extra_thrust_dt:
             dt /= 10
+            dt = (dt, True)
 
         if type(self.thrust_model) == list and type(self.thrust_model[0]) in [float, int]:
             self.thrust_type = "constant"
@@ -41,9 +42,9 @@ class MAV_thrust:
             self.magnitude_function = self.thrust_model.magnitude_interpolator
             self.m_dot_function = self.thrust_model.m_dot_interpolator
             self.burn_time = self.thrust_model.saved_burn_times[-1]
-            del(self.thrust_model.saved_magnitudes)
-            del(self.thrust_model.saved_burn_times)
-            del(self.thrust_model.saved_m_dot_s)
+            # del(self.thrust_model.saved_magnitudes)
+            # del(self.thrust_model.saved_burn_times)
+            # del(self.thrust_model.saved_m_dot_s)
         else:
             raise NotImplementedError("The thrust model `%s` does not correspond to anything implemented" % type(self.thrust_model))
         
@@ -85,7 +86,7 @@ class MAV_thrust:
             return self.magnitude
         elif self.thrust_type == "from_geometry":
             t = time_input if use_time_input else self.time_elapsed
-            return self.magnitude_function(t)+self.thrust_devs[0]
+            return max(0, self.magnitude_function(t)+self.thrust_devs[0])
 
     def get_specific_impulse(self, time, use_time_input=False):
         if self.thrust_type == "constant":

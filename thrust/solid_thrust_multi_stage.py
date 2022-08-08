@@ -1,3 +1,4 @@
+from typing import Tuple
 import numpy as np
 from scipy.optimize import fsolve
 from scipy.interpolate import interp1d
@@ -27,6 +28,7 @@ class SRM_thrust_rk4:
 
         self.geometry_model = geometry_model
         self.A_t = A_t
+        self.epsilon = epsilon
         self.A_e = A_t * epsilon
         self.T_c = T_c              
         self.p_a = p_a
@@ -134,6 +136,12 @@ class SRM_thrust_rk4:
         # x     = [M_p,   b]
         # x_dot = [m_dot, r]
         b_s, p_c_s, M_p_s = [], [], []
+        if type(dt) is tuple:
+            dt, extra_accurate = dt[0], dt[1]
+            if extra_accurate:
+                timeout = 200
+        else:
+            timeout = 30
         if filename is None:
             if use_cpp:
                 from thrust.models.CPP.SRM_cpp import run_sim
@@ -142,8 +150,12 @@ class SRM_thrust_rk4:
                 self.saved_burn_times, self.saved_magnitudes, self.saved_m_dot_s = run_sim(
                     cpp_geometry_model,
                     dt,
-                    timeout=30.0
+                    self.A_t,
+                    self.epsilon,
+                    self.p_a,
+                    timeout=timeout
                 )
+                del(cpp_geometry_model)
                 if self.saved_burn_times[-1] == -1:
                     raise ValueError("Simulation timed out")
             else:
