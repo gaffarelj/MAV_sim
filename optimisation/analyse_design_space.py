@@ -35,44 +35,55 @@ if plot_trajectories:
     all_dvs_types = ["*"] if nice_png_fig else ["all", "init_angle_only", "TVC_only", "SRM_only", "*"]
     for dv_used in all_dvs_types:
         if dv_used == "*":
-            req = "SELECT id, h_p_score, h_a_score FROM solutions_multi_fin WHERE h_p_score IS NOT NULL AND angle_1 IS NOT NULL"# ORDER BY RANDOM() LIMIT 1000"
-            line_thickness = 0.05
-            alpha = 0.5
+            n_sols, res_dict = 0, {}
+            for SRM_type in ["multi_fin", "tubular", "rod_and_tube", "anchor"]:
+                req = "SELECT id, h_p_score, h_a_score FROM solutions_%s WHERE h_p_score IS NOT NULL AND angle_1 IS NOT NULL" % SRM_type # ORDER BY RANDOM() LIMIT 1000"
+                line_thickness = 0.05
+                alpha = 0.5
+                cur.execute(req)
+                res_tmp = cur.fetchall()
+                res_dict[SRM_type] = res_tmp
+                n_sols += len(res_tmp)
+            print("Number of solutions:", n_sols)
         else:
             req = "SELECT id FROM solutions_multi_fin WHERE h_a > 200e3 AND h_p > 200e3 AND h_a < 500e3 AND h_p < 500e3 AND dv_used = '%s'"%dv_used
             line_thickness = 0.5
             alpha = 1.0
-        cur.execute(req)
-        res = cur.fetchall()
-        ids = [i[0] for i in res]
-        # Plot trajectories
+            cur.execute(req)
+            res = cur.fetchall()
         if nice_png_fig:
             plt.figure(figsize=(9,12.73))
         else:
             plt.figure(figsize=(9,5))
-        for i, id in enumerate(ids):
-            if i % 25 == 0:
-                print("Plotting trajectory %i of %i for %s"%(i+1, len(ids), dv_used), end="\r")
-            # Load simulation results
-            try:
-                sim_results = np.load(sys.path[0]+"/optimisation/sim_results/%i.npz"%id)
-            except FileNotFoundError:
-                continue
-            times = sim_results["times"]
-            altitudes = sim_results["dep_vars"][:,0]
-            if nice_png_fig:
+        for SRM_type in ["multi_fin", "tubular", "rod_and_tube", "anchor"]:
+            res = res_dict[SRM_type]
+            ids = [i[0] for i in res]
+            # Plot trajectories
+            for i, id in enumerate(ids):
+                if i % 25 == 0:
+                    print("Plotting trajectory %i of %i for %s / %s"%(i+1, len(ids), dv_used, SRM_type), end="\r")
+                # Load simulation results
                 try:
-                    score_a = max(res[i][1], 1/100)
-                    score_b = max(res[i][2], 1/100)
-                except TypeError:
+                    sim_results = np.load(sys.path[0]+"/optimisation/sim_results/%s/%i.npz"%(SRM_type, id))
+                except FileNotFoundError:
                     continue
-                line_thickness = (min(1/np.sqrt(score_a), 1)/3+min(1/np.sqrt(score_b), 1)*2/3)*0.025
-                alpha = (min(1/np.sqrt(score_a), 1)/3+min(1/np.sqrt(score_b), 1)*2/3)#*0.75
-            plt.plot(times[:1000]/60, altitudes[:1000]/1e3, linewidth=line_thickness, color="C%i"%(i+1), alpha=alpha)
-            plt.plot(times[1001:]/60, altitudes[1001:]/1e3, linewidth=line_thickness, color="C%i"%(i+1), alpha=alpha)
-            plt.plot(times[998:1002]/60, altitudes[998:1002]/1e3, linewidth=line_thickness, linestyle="solid", color="C%i"%(i+1), alpha=alpha)
-        print("Plotted %i trajectories for %s                     "%(len(ids), dv_used))
+                times = sim_results["times"]
+                altitudes = sim_results["dep_vars"][:,0]
+                if nice_png_fig:
+                    try:
+                        score_a = max(res[i][1], 1/200)
+                        score_b = max(res[i][2], 1/200)
+                    except TypeError:
+                        continue
+                    line_thickness = (min(1/np.sqrt(score_a), 1)/3+min(1/np.sqrt(score_b), 1)*2/3)*0.015
+                    alpha = (min(1/np.sqrt(score_a), 1)/3+min(1/np.sqrt(score_b), 1)*2/3)#*0.75
+                plt.plot(times[:1000]/60, altitudes[:1000]/1e3, linewidth=line_thickness, color="C%i"%(i+1), alpha=alpha)
+                plt.plot(times[1001:]/60, altitudes[1001:]/1e3, linewidth=line_thickness, color="C%i"%(i+1), alpha=alpha)
+                plt.plot(times[998:1002]/60, altitudes[998:1002]/1e3, linewidth=line_thickness, linestyle="solid", color="C%i"%(i+1), alpha=alpha)
+            print("Plotted %i trajectories for %s / %s                     "%(len(ids), dv_used, SRM_type))
         # Prettify plot
+        if nice_png_fig:
+            print("Generating and saving plot (this may take a while)...")
         plt.xlabel("Time [min]")
         plt.ylabel("Altitude [km]")
         if dv_used == "*":
@@ -215,6 +226,10 @@ if analyse_correlation:
 
 if get_initial_population:
     N = 72
+    # SRM_type = "multi_fin"
+    # SRM_type = "tubular"
+    # SRM_type = "rod_and_tube"
+    SRM_type = "anchor"
     samples_weights = {
         "init_angle_only": 2,
         "TVC_only": 1,
@@ -229,17 +244,20 @@ if get_initial_population:
         sim_num = int(N*fraction)
         if dv_used == "all":
             sim_num = N - i_tot
-        req = "SELECT id FROM solutions_multi_fin WHERE dv_used = '%s' ORDER BY h_a_score+h_p_score+mass_score ASC LIMIT %i"%(dv_used, sim_num)
+        req = "SELECT id FROM solutions_%s WHERE dv_used = '%s' ORDER BY h_a_score+h_p_score+mass_score ASC LIMIT %i"%(SRM_type, dv_used, sim_num)
         cur.execute(req)
         ids = [i[0] for i in cur.fetchall()]
         for i, id in enumerate(ids):
             # Load simulation results
-            sim_results = np.load(sys.path[0]+"/optimisation/sim_results/%i.npz"%id)
-            times = sim_results["times"]
-            altitudes = sim_results["dep_vars"][:,0]
-            plt.plot(times[:1000]/60, altitudes[:1000]/1e3, linewidth=0.15, color="C%i"%(i+1))
-            plt.plot(times[1001:]/60, altitudes[1001:]/1e3, linewidth=0.15, color="C%i"%(i+1))
-            plt.plot(times[998:1002]/60, altitudes[998:1002]/1e3, linewidth=0.15, linestyle="dashed", color="C%i"%(i+1))
+            try:
+                sim_results = np.load(sys.path[0]+"/optimisation/sim_results/%s/%i.npz"%(SRM_type, id))
+                times = sim_results["times"]
+                altitudes = sim_results["dep_vars"][:,0]
+                plt.plot(times[:1000]/60, altitudes[:1000]/1e3, linewidth=0.15, color="C%i"%(i+1))
+                plt.plot(times[1001:]/60, altitudes[1001:]/1e3, linewidth=0.15, color="C%i"%(i+1))
+                plt.plot(times[998:1002]/60, altitudes[998:1002]/1e3, linewidth=0.15, linestyle="dashed", color="C%i"%(i+1))
+            except FileNotFoundError:
+                print("File not found for id %i"%id)
         print("Plotted %i trajectories for initial population from %s"%(len(ids), dv_used))
         i_tot += len(ids)
     print("Plotted %i trajectories for initial population"%i_tot)
@@ -248,7 +266,7 @@ if get_initial_population:
     plt.ylabel("Altitude [km]")
     plt.grid()
     plt.tight_layout()
-    plt.savefig(sys.path[0]+"/plots/optimisation/initial_population.pdf")
+    plt.savefig(sys.path[0]+"/plots/optimisation/initial_population_%s.pdf"%SRM_type)
 
 if pareto_fronts:
     for dv_used in ["init_angle_only", "TVC_only", "SRM_only", "all", "*"]:

@@ -25,6 +25,9 @@ from tudatpy.kernel.math import interpolators
 # Custom imports
 from setup.ascent_framework import MAV_ascent, FakeAeroGuidance
 from thrust.models.multi_fin import multi_fin_SRM
+from thrust.models.anchor import anchor_SRM
+from thrust.models.tubular import tubular_SRM
+from thrust.models.rod_and_tube import rod_and_tube_SRM
 from optimisation import ascent_problem as AP
 
 def score_altitude(h, h_min=300e3, h_max=375e3):
@@ -91,7 +94,7 @@ def MAV_ascent_sim(
         ascent_model.create_bodies(stage=stage, add_sun=True, use_new_coeffs=True, custom_exponential_model=True)
         t0 = T.time()
         try:
-            ascent_model.create_accelerations(use_cpp=(stage==1), better_precision=True, extra_thrust_dt=better_accuracy)
+            ascent_model.create_accelerations(use_cpp=True, better_precision=True, extra_thrust_dt=better_accuracy)
         except ValueError:
             return 100, 100
         guidance_object = FakeAeroGuidance()
@@ -99,7 +102,7 @@ def MAV_ascent_sim(
         ascent_model.create_initial_state()
         ascent_model.create_dependent_variables_to_save(False)
         ascent_model.dependent_variables_to_save.append(propagation_setup.dependent_variable.altitude(ascent_model.current_name, "Mars"))
-        ascent_model.create_termination_settings(end_time=160*60, cpu_time_termination=30)
+        ascent_model.create_termination_settings(end_time=160*60, cpu_time_termination=60)#30)
         ascent_model.create_propagator_settings()
         ascent_model.create_integrator_settings(better_accuracy=better_accuracy)
         with util.redirect_std():
@@ -115,7 +118,8 @@ def MAV_ascent_sim(
         if stage == 1:
             t_b_1 = ascent_model.thrust.burn_time
             t_sep = times[-1]
-            if final_h < 0 or dt > 29:
+            if final_h < 0 or dt > 60:#29:
+                print("Simulation took too long (%.1f s) or went too low (%.1f km)" % (dt, final_h/1e3))
                 break
         else:
             t_b_2 = ascent_model.thrust.burn_time
@@ -169,12 +173,21 @@ def MAV_ascent_sim(
     h_p_score, h_a_score = score_altitude(h_peri), score_altitude(h_apo)
     mass_score = score_mass(mass_1)
 
-    if save_to_db is not None:
+    if type(thrust_model_1.geometry_model) == multi_fin_SRM:
+        SRM_name = "multi_fin"
+    elif type(thrust_model_1.geometry_model) == tubular_SRM:
+        SRM_name = "tubular"
+    elif type(thrust_model_1.geometry_model) == rod_and_tube_SRM:
+        SRM_name = "rod_and_tube"
+    elif type(thrust_model_1.geometry_model) == anchor_SRM:
+        SRM_name = "anchor"
+
+    if save_to_db is not None:        
         # Connect to the database
         con = sqlite3.connect(sys.path[0]+"/optimisation/design_space.db", timeout=30)
         cur = con.cursor()
         # Insert results
-        req = "UPDATE solutions_multi_fin "
+        req = "UPDATE solutions_" + SRM_name + " "
         # req += "(h_p_score, h_a_score, mass_score, final_time, h_a, h_p, mass, inclination, t_b_1, t_b_2)"
         req += "SET h_p_score = ?, h_a_score = ?, mass_score = ?, final_time = ?, h_a = ?, h_p = ?, mass = ?, inclination = ?, t_b_1 = ?, t_b_2 = ? "
         req += "WHERE id = ?"
@@ -183,7 +196,7 @@ def MAV_ascent_sim(
         con.commit()
         con.close()
         # Save resampled results to file
-        np.savez(sys.path[0]+"/optimisation/sim_results/%i.npz" % save_to_db, times=times_resampled, states=states_resampled, dep_vars=dep_vars_resampled)
+        np.savez(sys.path[0]+"/optimisation/sim_results/%s/%i.npz" % (SRM_name, save_to_db), times=times_resampled, states=states_resampled, dep_vars=dep_vars_resampled)
 
 
     # Do some cleanup
@@ -197,6 +210,7 @@ def MAV_ascent_sim(
 if __name__ == "__main__":
     # Parameters
     seed = 42
+    SRM_type = "anchor"
 
     for seed in [42, 13, 123, 846, 579]:
         pop_size = 8*17
@@ -255,18 +269,38 @@ if __name__ == "__main__":
         N_TVC_nodes = 5
         spherical_SRM_range = [[0.3, 0.2], [1.0, 0.9]]
         multi_fin_SRM_range = [[0.3, 0.1, 0.2, 0.25, 0.35, 3], [1.25, 0.285, 0.9, 0.75, 0.9, 20]]
+        tubular_motor_range = [[0.3, 0.1, 0.2], [1.25, 0.285, 0.9]]
+        rod_and_tube_motor_range = [[0.3, 0.1, 0.2, 0.2], [1.25, 0.285, 0.9, 0.9]]
+        anchor_range = [[0.3, 0.05, 0.2, 0.3, 0.05, 0.1, 2], [1.25, 0.285, 0.6, 0.85, 0.95, 0.75, 6]]
+        SRM_range_to_use = None
+        SRM_class = None
+        if SRM_type == "multi_fin":
+            SRM_range_to_use = multi_fin_SRM_range
+            SRM_class = multi_fin_SRM
+        elif SRM_type == "tubular":
+            SRM_range_to_use = tubular_motor_range
+            SRM_class = tubular_SRM
+        elif SRM_type == "rod_and_tube":
+            SRM_range_to_use = rod_and_tube_motor_range
+            SRM_class = rod_and_tube_SRM
+        elif SRM_type == "anchor":
+            SRM_range_to_use = anchor_range
+            SRM_class = anchor_SRM
+        else:
+            raise ValueError("Unknown SRM type: %s" % SRM_type)
+
         design_var_range = (
-            [launch_angle_1_range[0], launch_angle_2_range[0], *[TVC_range[0]]*N_TVC_nodes, *spherical_SRM_range[0], *multi_fin_SRM_range[0]],
-            [launch_angle_1_range[1], launch_angle_2_range[1], *[TVC_range[1]]*N_TVC_nodes, *spherical_SRM_range[1], *multi_fin_SRM_range[1]]
+            [launch_angle_1_range[0], launch_angle_2_range[0], *[TVC_range[0]]*N_TVC_nodes, *spherical_SRM_range[0], *SRM_range_to_use[0]],
+            [launch_angle_1_range[1], launch_angle_2_range[1], *[TVC_range[1]]*N_TVC_nodes, *spherical_SRM_range[1], *SRM_range_to_use[1]]
         )
 
         # Define the optimisation problem
         if tuning:
-            ascent_problem = AP.MAV_problem(design_var_range, multi_fin_SRM, save_to_db="%s_%s_tuning_~N~" % (algo_name, seed))
+            ascent_problem = AP.MAV_problem(design_var_range, SRM_class, save_to_db="%s_%s_tuning_~N~" % (algo_name, seed))
         elif param_tuning:
-            ascent_problem = AP.MAV_problem(design_var_range, multi_fin_SRM, save_to_db="%s_%s_pt_~N~" % (param_tune_name, seed))
+            ascent_problem = AP.MAV_problem(design_var_range, SRM_class, save_to_db="%s_%s_pt_~N~" % (param_tune_name, seed))
         else:
-            ascent_problem = AP.MAV_problem(design_var_range, multi_fin_SRM, save_to_db=save_to_db)
+            ascent_problem = AP.MAV_problem(design_var_range, SRM_class, save_to_db=save_to_db)
         problem = pg.problem(ascent_problem)
 
         # Initialise a Pygmo population
@@ -302,15 +336,20 @@ if __name__ == "__main__":
             sim_num = int(pop_size*fraction)
             if dv_used == "all":
                 sim_num = pop_size - len(ids)
-            req = "SELECT * FROM solutions_multi_fin WHERE dv_used = '%s' ORDER BY h_a_score+h_p_score+mass_score ASC LIMIT %i"%(dv_used, sim_num)
+            req = "SELECT * FROM solutions_%s WHERE dv_used = '%s' ORDER BY h_a_score+h_p_score+mass_score ASC LIMIT %i"%(SRM_type, dv_used, sim_num)
             cur.execute(req)
             res = cur.fetchall()
             [ids.append(row[0]) for row in res]
             for row in res:
                 # Add to population
-                pop.push_back(
-                    x=row[1:3]+row[8:21],
-                    f=row[21:24])
+                if SRM_type == "multi_fin":
+                    pop.push_back(
+                        x=row[1:3]+row[8:21],
+                        f=row[21:24])
+                else:
+                    pop.push_back(
+                        x=row[1:len(design_var_range[0])+1],
+                        f=row[len(design_var_range[0])+1:len(design_var_range[0])+4])
         con.close()
 
         # print("Initial population:")
@@ -318,7 +357,7 @@ if __name__ == "__main__":
 
         # Run the optimisation
         for i in range(1, n_generations+1):
-            print("*** Running generation %2d / %2d with %s (seed %s) ***" % (i, n_generations, algo_name, seed))
+            print("*** Running generation %2d / %2d with %s (seed %s, motor %s) ***" % (i, n_generations, algo_name, seed, SRM_type))
 
             # Evolve the population
             pop = algo.evolve(pop)
