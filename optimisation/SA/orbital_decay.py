@@ -16,6 +16,7 @@ from matplotlib import pyplot as plt
 import datetime
 import glob
 import multiprocessing
+from collections import OrderedDict
 
 # Tudatpy imports
 from tudatpy.kernel import numerical_simulation
@@ -23,15 +24,17 @@ from tudatpy.kernel.numerical_simulation import environment, environment_setup
 from tudatpy.kernel.numerical_simulation import propagation_setup
 from tudatpy.kernel.astro import element_conversion, time_conversion
 from tudatpy.kernel.interface import spice
-from tudatpy import util, plotting
+from tudatpy import util
 spice.load_standard_kernels()
 
 run_sims = False
 analyse_res = True
+vary_CD = False
+analyse_CD_res = False
 
 i = 0
 
-def run_orbital_decay(h_p, h_a):
+def run_orbital_decay(h_p, h_a, CD_fact=None):
     calendar_date = datetime.datetime(2031, 2, 28, 12, 0, 0)
     julian_date = time_conversion.calendar_date_to_julian_day(calendar_date)
     simulation_start_epoch = time_conversion.julian_day_to_seconds_since_epoch(julian_date)
@@ -57,7 +60,9 @@ def run_orbital_decay(h_p, h_a):
     current_body = bodies.get(current_name)
     # Add mass and CD interface
     current_body.set_constant_mass(60)
-    CDs = CDs = [1.5986, 1.7730, 1.7659, 1.7397, 1.7166, 1.7022, 1.6930, 1.6871, 1.6843, 1.6830, 1.6837, 1.6843, 1.6815]
+    CDs = [1.5986, 1.7730, 1.7659, 1.7397, 1.7166, 1.7022, 1.6930, 1.6871, 1.6843, 1.6830, 1.6837, 1.6843, 1.6815]
+    if CD_fact is not None:
+        CDs = [CD_fact] * len(CDs)
     hs =   np.array([100, 125, 150, 175, 200, 225, 250, 275, 300, 350, 400, 450, 500])*1e3
     cs = interpolate.interp1d(hs, CDs, kind="quadratic", bounds_error=False, fill_value="extrapolate")
     def get_CD(dep_vars):
@@ -180,18 +185,23 @@ def run_orbital_decay(h_p, h_a):
     print("Re-entered atmosphere after %.2f days"% times[-1])
 
     ## Save results
-    np.savez(sys.path[0]+"/data/optimisation/SA/h_history_%i_%i.npz"%(h_p/1e3, h_a/1e3), times=times, h_a_s=h_a_s, h_p_s=h_p_s, inclinations=inclinations)
+    if CD_fact is None:
+        np.savez(sys.path[0]+"/data/optimisation/SA/h_history_%i_%i.npz"%(h_p/1e3, h_a/1e3), times=times, h_a_s=h_a_s, h_p_s=h_p_s, inclinations=inclinations)
+    else:
+        np.savez(sys.path[0]+"/data/optimisation/SA/h_history_CD_%.3f.npz"%(CD_fact), orbital_lifetime=times[-1])
 
 if __name__ == "__main__":
-    
+
     if run_sims:
         inputs = []
-        altitudes = [305, 315, 325, 335, 345, 355, 365, 375, 385]
+        # altitudes = [305, 315, 325, 335, 345, 355, 365, 375, 385]
+        # altitudes = np.arange(300, 385.1, 2.5)
+        altitudes = [339.3, 314.1]
         for h_p in altitudes:
             h_p *= 1e3
-            for h_a in altitudes:
+            for h_a in [h_p/1e3]:#altitudes:
                 h_a *= 1e3
-                # Check that apoapsis is higher
+                # Check that apoapsis is higher than periapsis
                 if h_p > h_a:
                     continue
                 # Check that results file doesn't exist
@@ -203,56 +213,115 @@ if __name__ == "__main__":
         with multiprocessing.get_context("spawn").Pool(processes=45) as pool:
             outputs = pool.starmap(run_orbital_decay, inputs)
 
+    if vary_CD:
+        inputs = []
+        h_p, h_a = 314.1e3, 339.3e3
+        CD_factors = np.arange(1.4, 2.2001, 0.025)
+        for CD_f in CD_factors:
+            # Check that results file doesn't exist
+            if os.path.isfile(sys.path[0]+"/data/optimisation/SA/h_history_CD_%.3f.npz"%(CD_f)):
+                continue
+            print("%.3f"%CD_f)
+            inputs.append((h_p, h_a, CD_f))
+        input("Press ENTER to run %i inputs..."%len(inputs))
+        with multiprocessing.get_context("spawn").Pool(processes=45) as pool:
+            outputs = pool.starmap(run_orbital_decay, inputs)
+
     if analyse_res:
         # Load all files ending in .npz from results folder
         files = glob.glob(sys.path[0]+"/data/optimisation/SA/h_history_*.npz")
-        h_a_s, h_p_s, decays = [], [], []
+        h_a_s, h_p_s, decays, repeats = [], [], [], []
         for file in files:
+            _d = file.split(".")[0].split("_")
+            try:
+                h_p, h_a = int(_d[-2]), int(_d[-1])
+            except ValueError:
+                continue
+            if h_p != h_a and (h_p != 314 and h_a != 339):
+                continue
             results = np.load(file)
             times = results["times"]
             inclinations = results["inclinations"]
-            plt.figure(figsize=(9,5))
-            plt.plot(times, inclinations)
             idx_0 = np.argwhere(np.fabs((inclinations - inclinations[0])) < 0.1)
             times_repeat = times[idx_0].flatten()
             # Remove values from times_repeat that have less than 0.25 between them
             times_repeat = times_repeat[np.insert(np.diff(times_repeat) > 0.25, 0, False)]
+            h_p, h_a = results["h_p_s"][0], results["h_a_s"][0]
 
-            ylims = plt.ylim()
-            plt.vlines(times_repeat, -900, 900, linestyles="dashed", colors="black")
-            plt.ylim(ylims)
-            plt.xlabel("Time [days]")
-            plt.ylabel("Inclination [deg]")
-            plt.grid()
-            plt.tight_layout()
-            plt.savefig(sys.path[0]+"/plots/optimisation/SA/decay/inclination_%s.pdf"%"_".join(file.split("/")[-1].split(".")[0].split("_")[-2:]))
-            plt.close()
+            # plt.figure(figsize=(9,3.5))
+            # plt.plot(times, inclinations)
+            # ylims = plt.ylim()
+            # plt.vlines(times_repeat, -900, 900, linestyles="dashed", colors="black")
+            # plt.ylim(ylims)
+            # plt.xlabel("Time [days]")
+            # plt.ylabel("Inclination [deg]")
+            # plt.grid()
+            # plt.tight_layout()
+            # plt.savefig(sys.path[0]+"/plots/optimisation/SA/decay/inclination_%s.pdf"%"_".join(file.split("/")[-1].split(".")[0].split("_")[-2:]))
+            # plt.close()
 
-            plt.figure(figsize=(9,5))
-            plt.plot(times, results["h_a_s"], label="Apoapsis")
-            plt.plot(times, results["h_p_s"], label="Periapsis")
-            plt.xlabel("Time [days]")
-            plt.ylabel("Altitude [km]")
-            plt.legend(loc="upper right")
-            plt.hlines(300, -10, 9999, linestyles="dashed", colors="black")
-            plt.xlim(-0.5, times[-1]+0.5)
-            plt.grid()
-            plt.tight_layout()
-            plt.savefig(sys.path[0]+"/plots/optimisation/SA/decay/h_history_%s.pdf"%"_".join(file.split("/")[-1].split(".")[0].split("_")[-2:]))
-            plt.close()
-            
-            _d = file.split(".")[0].split("_")
-            h_p, h_a = int(_d[-2]), int(_d[-1])
+            # plt.figure(figsize=(9,3.5))
+            # plt.plot(times, results["h_a_s"], label="Apoapsis")
+            # plt.plot(times, results["h_p_s"], label="Periapsis")
+            # plt.xlabel("Time [days]")
+            # plt.ylabel("Altitude [km]")
+            # plt.legend(loc="upper right")
+            # plt.hlines(300, -10, 9999, linestyles="dashed", colors="black")
+            # plt.xlim(-0.5, times[-1]+0.5)
+            # plt.grid()
+            # plt.tight_layout()
+            # plt.savefig(sys.path[0]+"/plots/optimisation/SA/decay/h_history_%s.pdf"%"_".join(file.split("/")[-1].split(".")[0].split("_")[-2:]))
+            # plt.close()
             print("h_p = %i, h_a = %i, decay after %.2f days"%(h_p, h_a, times[-1]))
             print(" -> , %i repeats at %.2f deg, after %s days"%(len(times_repeat), inclinations[0], str(times_repeat)))
-            h_a_s.append(h_a), h_p_s.append(h_p), decays.append(times[-1])
+            h_a_s.append(h_a), h_p_s.append(h_p), decays.append(times[-1]), repeats.append(len(times_repeat))
 
-        for x_data, x_label, fname in zip([h_a_s, h_p_s], ["h_p [km]", "h_a [km]"], ["decay_time_vs_h_p", "decay_time_vs_h_a"]):
-            plt.figure(figsize=(9,5))
-            plt.scatter(x_data, decays)
-            plt.xlabel(x_label)
-            plt.ylabel("Decay time [days]")
-            plt.grid()
-            plt.tight_layout()
-            plt.savefig(sys.path[0]+"/plots/optimisation/SA/decay/%s.pdf"%fname)
-            plt.close()
+        # for x_data, x_label, fname in zip([h_a_s, h_p_s], ["h_p [km]", "h_a [km]"], ["decay_time_vs_h_p", "decay_time_vs_h_a"]):
+            # plt.figure(figsize=(9,5))
+            # plt.scatter(x_data, decays)
+            # plt.xlabel(x_label)
+            # plt.ylabel("Decay time [days]")
+            # plt.grid()
+            # plt.tight_layout()
+            # plt.savefig(sys.path[0]+"/plots/optimisation/SA/decay/%s.pdf"%fname)
+            # plt.close()
+        
+        fig, ax1 = plt.subplots(figsize=(9,3.5))
+        ax1.set_xlabel("Initial $h_p$ [km]")
+        ax1.set_ylabel("Decay time [days]", color="tab:blue")
+        ax1.scatter(h_p_s, decays, color="tab:blue", marker="x")
+        ax1.set_yticks([0, 40, 80, 120, 160, 200, 240])
+        ax1.set_xticks([300, 310, 320, 330, 340, 350, 360, 370, 380, 390])
+        ax1.tick_params(axis="y", labelcolor="tab:blue")
+        ax1.set_ylim(0, 260)
+        ax1.set_xlim(298, 392)
+        ax1.grid()
+        ax2 = ax1.twinx()
+        ax2.set_ylabel("Number of inclination repeats [-]", color="tab:red")
+        ax2.scatter(h_p_s, repeats, color="tab:red", marker="+")
+        ax2.tick_params(axis="y", labelcolor="tab:red")
+        ax2.set_ylim(0, 13)
+        fig.tight_layout()
+        plt.savefig(sys.path[0]+"/plots/optimisation/SA/decay/h_p_vs_decay_repeats.pdf")
+        plt.close()
+
+    if analyse_CD_res:
+        # Load all files ending in .npz from results folder
+        files = glob.glob(sys.path[0]+"/data/optimisation/SA/h_history_CD_*.npz")
+        res = {}
+        for file in files:
+            CD_factor = float(file.split("_")[-1].replace(".npz", ""))
+            results = np.load(file)
+            lifetime = results["orbital_lifetime"]
+            res[CD_factor] = lifetime
+        # Order dict by keys
+        res = OrderedDict(sorted(res.items()))
+        plt.figure(figsize=(9,3.5))
+        plt.scatter(list(res.keys()), list(res.values()))
+        plt.xlabel("Constant $C_D$ [-]")
+        plt.ylabel("Orbital lifetime [days]")
+        plt.grid()
+        plt.tight_layout()
+        plt.savefig(sys.path[0]+"/plots/optimisation/SA/decay/h_history_CD.pdf")
+        for cd_f, ol in res.items():
+            print("CD = %.2f, orbital lifetime = %.2f days"%(cd_f, ol))
