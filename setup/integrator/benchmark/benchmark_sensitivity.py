@@ -25,7 +25,7 @@ from tudatpy import util
 from setup import ascent_framework_benchmarks
 from thrust.models.multi_fin import multi_fin_SRM
 from thrust.models.spherical import spherical_SRM
-from thrust.solid_thrust import SRM_thrust
+from thrust.solid_thrust_multi_stage import SRM_thrust_rk4 as SRM_thrust
 
 
 # Main parameters

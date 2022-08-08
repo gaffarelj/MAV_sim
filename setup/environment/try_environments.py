@@ -165,7 +165,7 @@ for i_acc in range(n_accs):
             use_MCD=(analyse_atmo and i_acc==2),
             # use_GRAM=(analyse_atmo and i_acc==2)
         )
-        accelerations_dict = MAV_ascent.create_accelerations(use_cpp=(stage==1), only_thrust_dict=True, thrust_fname=glob.glob(sys.path[0]+"/data/best_integrator_dt/thrust_%i_dt_*.npz"%stage)[0])
+        accelerations_dict = MAV_ascent.create_accelerations(use_cpp=True, only_thrust_dict=True, thrust_fname=glob.glob(sys.path[0]+"/data/best_integrator_dt/thrust_%i_dt_*.npz"%stage)[0])
         label_acc, accelerations_dict = environment_names_and_settings(i_acc, accelerations_dict)
         MAV_ascent.acceleration_models = propagation_setup.create_acceleration_models(
             MAV_ascent.bodies,

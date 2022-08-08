@@ -71,7 +71,7 @@ stage_res = []
 for stage in [1, 2]:
     MAV_ascent.create_bodies(stage=stage)
     t0 = T.time()
-    MAV_ascent.create_accelerations(use_cpp=(stage==1))#, thrust_fname=glob.glob(sys.path[0]+"/data/best_integrator_dt/thrust_%i_dt_*.npz"%stage)[0])
+    MAV_ascent.create_accelerations(use_cpp=True)#, thrust_fname=glob.glob(sys.path[0]+"/data/best_integrator_dt/thrust_%i_dt_*.npz"%stage)[0])
     t1 = T.time()
     guidance_object = ascent_framework.FakeAeroGuidance()
     environment_setup.set_aerodynamic_guidance(guidance_object, MAV_ascent.current_body, silence_warnings=True)

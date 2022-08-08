@@ -96,7 +96,7 @@ for i_prop, propagator in enumerate(propagators):
             add_sun=True,
             use_new_coeffs=True
         )
-        MAV_ascent.create_accelerations(use_cpp=(stage==1), better_precision=False, thrust_fname=glob.glob(sys.path[0]+"/data/best_integrator_dt/thrust_%i_dt_*.npz"%stage)[0])
+        MAV_ascent.create_accelerations(use_cpp=True, better_precision=False, thrust_fname=glob.glob(sys.path[0]+"/data/best_integrator_dt/thrust_%i_dt_*.npz"%stage)[0])
         guidance_object = ascent_framework.FakeAeroGuidance()
         environment_setup.set_aerodynamic_guidance(guidance_object, MAV_ascent.current_body, silence_warnings=True)
         MAV_ascent.create_initial_state()
