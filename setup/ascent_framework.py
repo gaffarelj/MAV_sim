@@ -83,8 +83,13 @@ class MAV_ascent:
         use_MCD=False,
         use_GRAM=False,
         use_new_coeffs=False,
-        add_sun=False
+        add_sun=False,
+        dens_f=1.0,
+        use_MCD_winds_only=None
     ):
+        # use_GRAM = True
+        # custom_exponential_model = False
+        # include_radiation_pressure = True
         # Save which stage is now running, and create its name
         self.current_stage = stage
         self.current_name = "MAV stage %i" % self.current_stage
@@ -104,7 +109,7 @@ class MAV_ascent:
                 else:
                     rho_0 = 0.0525
                     h_s = 7295
-                return rho_0 * np.exp(-h/h_s)
+                return rho_0 * np.exp(-h/h_s) * dens_f
             body_settings.get("Mars").atmosphere_settings = environment_setup.atmosphere.custom_constant_temperature(
                 rho_expo,
                 constant_temperature=215,
@@ -129,6 +134,10 @@ class MAV_ascent:
             )
         else:
             body_settings.get("Mars").atmosphere_settings = environment_setup.atmosphere.exponential_predefined("Mars")
+        if use_MCD_winds_only is not None:
+            from atmosphere import MCD
+            mcd = MCD.mcd_interface(force_T=use_MCD_winds_only)
+            body_settings.get("Mars").atmosphere_settings.wind_settings = environment_setup.atmosphere.custom_wind_model(mcd.wind)
         self.bodies = environment_setup.create_system_of_bodies(body_settings)
         self.central_bodies = ["Mars"]
 
@@ -192,8 +201,10 @@ class MAV_ascent:
         thrust_dt=None,
         use_cpp=False,
         better_precision=False,
-        extra_thrust_dt=False
+        extra_thrust_dt=False,
+        sep_delay=0
     ):
+        delay = 0 if self.current_stage == 1 else sep_delay
         # Setup the MAV thrust class from the thrust models input to this ascent class
         self.thrust = MAV_thrust(
             self,
@@ -204,7 +215,8 @@ class MAV_ascent:
             thrust_filename=thrust_fname,
             dt=thrust_dt,
             use_cpp=use_cpp,
-            extra_thrust_dt=extra_thrust_dt)
+            extra_thrust_dt=extra_thrust_dt,
+            delay=delay)
 
         # Define the thrust acceleration direction and magnitude from the thrust class
         thrust_direction_settings = propagation_setup.thrust.custom_thrust_direction(self.thrust.get_thrust_orientation)
@@ -229,13 +241,15 @@ class MAV_ascent:
 
         # Add environmental accelerations (Mars SH up to D/O 4 and aerodynamics)
         SH_order = 6 if better_precision else 4
+        # SH_order = 8
         accelerations_on_vehicle["Mars"] = [
                 propagation_setup.acceleration.spherical_harmonic_gravity(SH_order, SH_order),
                 propagation_setup.acceleration.aerodynamic()
             ]
         if better_precision:
             accelerations_on_vehicle["Sun"] = [
-                propagation_setup.acceleration.point_mass_gravity()
+                propagation_setup.acceleration.point_mass_gravity(),
+                # propagation_setup.acceleration.cannonball_radiation_pressure()
             ]
 
         # Compile the dict of accelerations acting on the vehicle, and create the models for them
@@ -342,7 +356,7 @@ class MAV_ascent:
                 termination_root_finder_settings=root_finders.secant(
                     maximum_iteration=5,
                     maximum_iteration_handling=root_finders.MaximumIterationHandling.accept_result)
-                )
+            )
             
             # Combine both termination settings, to finish as soon as one of the two is reached
             list_terminations_settings = [termination_min_altitude_settings, termination_apogee_settings, termination_abs_max_altitude_settings]
@@ -420,10 +434,13 @@ class MAV_ascent:
         else:
             # If specified, setup a fixed step integrator by setting the tolerance to infinity
             if fixed_step is not None:
-                initial_time_step = fixed_step
-                minimum_time_step = fixed_step
-                maximum_time_step = fixed_step
-                tolerance = np.inf
+                coefficients = propagation_setup.integrator.rkf_45
+                self.integrator_settings = propagation_setup.integrator.runge_kutta_fixed_step_size(
+                    self.initial_epoch,
+                    fixed_step,
+                    coefficients,
+                    propagation_setup.integrator.OrderToIntegrate.higher,
+                    assess_termination_on_minor_steps=True)
             # Otherwise, define the variable step integrator with a tolerance of 1e-18
             else:
                 initial_time_step = 4.5e-5
@@ -432,20 +449,20 @@ class MAV_ascent:
                 tolerance = 1e-7
                 if better_accuracy:
                     tolerance = 1e-13
-            # Use RKF4(5) coefficients
-            coefficients = propagation_setup.integrator.rkf_45
-            self.integrator_settings = propagation_setup.integrator.runge_kutta_variable_step_size(
-                self.initial_epoch,
-                initial_time_step,
-                coefficients,
-                minimum_time_step,
-                maximum_time_step,
-                relative_error_tolerance=tolerance,
-                absolute_error_tolerance=tolerance,
-                maximum_factor_increase=1.01,#+0.1,
-                minimum_factor_increase=0.01,#+0.1,
-                throw_exception_if_minimum_step_exceeded=False,
-                assess_termination_on_minor_steps=True)
+                # Use RKF4(5) coefficients
+                coefficients = propagation_setup.integrator.rkf_45
+                self.integrator_settings = propagation_setup.integrator.runge_kutta_variable_step_size(
+                    self.initial_epoch,
+                    initial_time_step,
+                    coefficients,
+                    minimum_time_step,
+                    maximum_time_step,
+                    relative_error_tolerance=tolerance,
+                    absolute_error_tolerance=tolerance,
+                    maximum_factor_increase=1.01,#+0.1,
+                    minimum_factor_increase=0.01,#+0.1,
+                    throw_exception_if_minimum_step_exceeded=False,
+                    assess_termination_on_minor_steps=True)
 
     def run_simulation(self, return_raw=False, return_count=False, return_success_status=False):
         # Run the ascent simulation (do not print the state or dependent variable content)
