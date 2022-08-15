@@ -18,9 +18,10 @@ from thrust.solid_thrust_multi_stage import SRM_thrust_rk4
 class MAV_thrust:
 
     def __init__(self, ascent_model, angle, thrust_model, body_directions_y=0, body_directions_z=0,
-    print_status=False, dt=None, thrust_filename=None, thrust_devs=[0, 0], use_cpp=False, extra_thrust_dt=False):
+    print_status=False, dt=None, thrust_filename=None, thrust_devs=[0, 0], use_cpp=False, extra_thrust_dt=False, delay=0):
         self.angle = angle
         self.thrust_model = thrust_model
+        self.delay = delay
         if dt is None:
             dt = 2.0e-6 if ascent_model.current_stage == 1 else 1.5e-2
         if extra_thrust_dt:
@@ -67,17 +68,18 @@ class MAV_thrust:
     def compute_time_elapsed(self, time):
         if self.first_t is None:
             self.first_t = time
-            self.time_elapsed = 0
+            self.time_elapsed = -self.delay
         else:
-            self.time_elapsed = time - self.first_t
+            self.time_elapsed = time - self.first_t - self.delay
         self.last_t = time
+        # print(time, self.time_elapsed)
 
     def is_thrust_on(self, time):
         if self.last_t != time:
             self.compute_time_elapsed(time)
 
         # There is no thrust after burn time has been reached
-        if self.time_elapsed > self.burn_time:
+        if self.time_elapsed > self.burn_time or self.time_elapsed < 0:
             return False
         return True
 
@@ -99,7 +101,7 @@ class MAV_thrust:
             self.compute_time_elapsed(time_input)
 
         if self.thrust_type == "from_geometry":
-            if self.time_elapsed > self.burn_time:
+            if self.time_elapsed > self.burn_time or self.time_elapsed < 0:
                 return 0
             t = time_input if use_time_input else self.time_elapsed
             return -np.fabs(self.m_dot_function(t))+self.thrust_devs[1]
@@ -107,7 +109,7 @@ class MAV_thrust:
             raise NotImplementedError("No mass flow model has been implemented in this case.")
 
     def get_body_fixed_thrust_direction(self):
-        if self.time_elapsed > self.burn_time:
+        if self.time_elapsed > self.burn_time or self.time_elapsed < 0:
             return np.zeros((3,3))
         else:
             angle_y = self.body_direction_y_function(self.time_elapsed)
