@@ -16,7 +16,7 @@ class mcd_interface:
     """
     This class is used as an interface to the Mars Climate Database.
     """
-    def __init__(self, default_inputs=True, save_all_vals=False):
+    def __init__(self, default_inputs=True, save_all_vals=False, force_T=None):
         # The following two arrays contain the times in solar longitude (Ls) at which different files will be loaded
         self.limiting_Ls = np.arange(0, 330.01, 30)
         self.n_species = (56, 65)   # list of the index at which the atmospheric atomic volumetric fractions are to be loaded
@@ -28,6 +28,7 @@ class mcd_interface:
         # Load a set of default inputs to the MCD
         if default_inputs:
             self.default_inputs()
+        self.force_T = force_T
 
     def default_inputs(self):
         # Load a set of default inputs for the MCD interface module
@@ -145,16 +146,21 @@ class mcd_interface:
            * y component: points to the East, positive towards East
            * z component: points to the centre of Mars, positive down
         """
-        self.xz = self.Mars_R + h   # convert altitude to distance from centre of Mars
+        self.xz = h
+        if h < -1150:
+            return 0.0, 0.0, 0.0
         self.xlat = lat
         self.xlon = lon
-        # If the time is a Julian date, convert it to solar longitude and day of the year
-        if time_is_JD:
-            Ls, Ds = TC.JD_to_Ls(time, JD_Tudat=JD_Tudat)
+        if self.force_T is not None:
+            Ls, Ds = self.force_T
         else:
-            Ls, Ds = time
+            # If the time is a Julian date, convert it to solar longitude and day of the year
+            if time_is_JD:
+                Ls, Ds = TC.JD_to_Ls(time, JD_Tudat=JD_Tudat)
+            else:
+                Ls, Ds = time
         # Convert the day of the year to hour of the day
-        self.localtime = Ds % 1 * 24
+        self.localtime = Ds
         self.xdate = Ls
         # Call the MCD
         self.call()
