@@ -403,7 +403,7 @@ if __name__ == "__main__":
         g.tight_layout()
         plt.savefig(sys.path[0]+"/plots/optimisation/SA/initial/SRM_pairplot.pdf")
 
-        ### SRM Size
+        ### Thrust misalignment
         cur.execute("SELECT param_value_1, h_p_diff, h_a_diff, i_diff FROM initial_variations WHERE param_used_1 = ? AND h_p_diff IS NOT NULL AND param_value_1 IS NOT NULL", ("misalign",))
         res = cur.fetchall()
         misalignments = np.array(res)[:,0]
@@ -421,6 +421,25 @@ if __name__ == "__main__":
         g.map_lower(sns.scatterplot)
         g.tight_layout()
         plt.savefig(sys.path[0]+"/plots/optimisation/SA/initial/misalign_pairplot.pdf")
+
+        ### Payload mass
+        cur.execute("SELECT param_value_1, h_p_diff, h_a_diff, i_diff FROM initial_variations WHERE param_used_1 = ? AND h_p_diff IS NOT NULL AND param_value_1 IS NOT NULL", ("payload_var",))
+        res = cur.fetchall()
+        payload_var = np.array(res)[:,0]
+        peri_errors = -np.array(res)[:,1]/1e3
+        apo_errors = -np.array(res)[:,2]/1e3
+        incli_errors = -np.rad2deg(np.array(res)[:,3])
+        print("Plotting for %i results"%len(payload_var))
+
+        # Make dataframe
+        df = pd.DataFrame({"Payload mass [kg]":payload_var, "Periapsis error [km]":peri_errors, "Apoapsis error [km]":apo_errors, "Inclination error [deg]":incli_errors})
+        plt.figure(figsize=(9,9))
+        g = sns.PairGrid(df, diag_sharey=False)
+        g.map_diag(sns.kdeplot, shade=True)
+        g.map_upper(sns.kdeplot, shade=True)
+        g.map_lower(sns.scatterplot)
+        g.tight_layout()
+        plt.savefig(sys.path[0]+"/plots/optimisation/SA/initial/payload_pairplot.pdf")
 
     con.close()
 
