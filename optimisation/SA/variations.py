@@ -39,8 +39,10 @@ run_error_latlon = False
 run_error_sepdelay = False
 run_dens_var = False
 try_MCD_winds = False
-run_error_SRM = True
-plot_all = False
+run_error_SRM = False
+run_misalignment = False
+run_payload_var = False
+plot_all = True
 
 N = 10000
 
@@ -59,7 +61,7 @@ def apo_peri_altitude_from_state(cartesian_state):
     return h_peri, h_apo, final_i
 
 def run_sim(id, start_h, angle_1, angle_2, TVC_angles_z, SRM1_geo, SRM2_geo, start_lat=np.deg2rad(18.85), \
-            start_lon=np.deg2rad(77.52), sep_delay=0, dens_f=1.0, MCD_winds=None, SRM_size_error=0):
+            start_lon=np.deg2rad(77.52), sep_delay=0, dens_f=1.0, MCD_winds=None, SRM_size_error=0, misalign=0, payload_mass_var=0):
     R_o_1, R_i_1, N_a, w, r_f, delta_s, L = SRM1_geo
     R_o_2, R_i_2 = SRM2_geo
     R_i_1, w, r_f, delta_s, R_i_2 = R_i_1 + SRM_size_error, w + SRM_size_error, r_f + SRM_size_error, delta_s + SRM_size_error, R_i_2 + SRM_size_error
@@ -80,7 +82,7 @@ def run_sim(id, start_h, angle_1, angle_2, TVC_angles_z, SRM1_geo, SRM2_geo, sta
     # exit()
 
     mass_2 = 47.5 + thrust_model_2.M_innert + thrust_model_2.M_p
-    mass_1 = 65 + mass_2 + thrust_model_1.M_innert + thrust_model_1.M_p
+    mass_1 = 65 + mass_2 + thrust_model_1.M_innert + thrust_model_1.M_p + payload_mass_var
 
     ascent_model = MAV_ascent(
         launch_epoch = 0,
@@ -104,9 +106,9 @@ def run_sim(id, start_h, angle_1, angle_2, TVC_angles_z, SRM1_geo, SRM2_geo, sta
     for stage in [1, 2]:
         ascent_model.create_bodies(stage=stage, add_sun=True, use_new_coeffs=True, custom_exponential_model=True, dens_f=dens_f, use_MCD_winds_only=MCD_winds)
         if SRM_size_error == 0:
-            ascent_model.create_accelerations(thrust_fname=sys.path[0]+"/data/opti_thrust_%i.npz"%stage, sep_delay=sep_delay)
+            ascent_model.create_accelerations(thrust_fname=sys.path[0]+"/data/opti_thrust_%i.npz"%stage, sep_delay=sep_delay, misalign=misalign)
         else:
-            ascent_model.create_accelerations(use_cpp=True, better_precision=True)
+            ascent_model.create_accelerations(use_cpp=(stage==1), better_precision=True)
         guidance_object = FakeAeroGuidance()
         environment_setup.set_aerodynamic_guidance(guidance_object, ascent_model.current_body, silence_warnings=True)
         ascent_model.create_initial_state()
@@ -170,6 +172,8 @@ if __name__ == "__main__":
         dens_variations = [1.0]
         MCD_winds = [None]
         SRM_errors = [0]
+        thrust_misalignments = [0]
+        payload_mass_variations = [0]
 
         if run_error_altitude:
             altitudes = np.random.normal(-2550, 50, size=N)
@@ -186,6 +190,10 @@ if __name__ == "__main__":
             MCD_winds = np.array(np.meshgrid(MCD_Ls, MCD_Ds)).T.reshape(-1, 2)
         elif run_error_SRM:
             SRM_errors = np.random.normal(0, 3e-4, N)
+        elif run_misalignment:
+            thrust_misalignments = np.random.normal(0, np.deg2rad(0.3), N)
+        elif run_payload_var:
+            payload_mass_variations = np.random.normal(0, 0.25, N)
 
         N_a = int(N_a)
         R_i_1 = R_i_frac_1 * R_o_1
@@ -210,52 +218,62 @@ if __name__ == "__main__":
                     for dens_f in dens_variations:
                         for MCD_wind in MCD_winds:
                             for SRM_error in SRM_errors:
-                                launch_lat, launch_lon = launch_lats[i_ll], launch_lons[i_ll]
-                                SRM1_geo = R_o_1, R_i_1, N_a, w, r_f, delta_s, L
-                                SRM2_geo = R_o_2, R_i_2
-                                # Check if already run
-                                if run_error_altitude:
-                                    cur.execute("SELECT id, h_p_diff FROM initial_variations WHERE param_used_1 = ? AND param_used_2 IS NULL AND param_value_1 = ?", ("start_h", start_h))
-                                elif run_error_latlon:
-                                    cur.execute("SELECT id, h_p_diff FROM initial_variations WHERE param_used_1 = ? AND param_used_2 = ? AND param_value_1 = ? AND param_value_2 = ?", ("start_lat", "start_lon", launch_lat, launch_lon))
-                                elif run_error_sepdelay:
-                                    cur.execute("SELECT id, h_p_diff FROM initial_variations WHERE param_used_1 = ? AND param_used_2 IS NULL AND param_value_1 = ?", ("sep_delay", sep_delay))
-                                elif run_dens_var:
-                                    cur.execute("SELECT id, h_p_diff FROM initial_variations WHERE param_used_1 = ? AND param_used_2 IS NULL AND param_value_1 = ?", ("dens_var", dens_f))
-                                elif try_MCD_winds:
-                                    cur.execute("SELECT id, h_p_diff FROM initial_variations WHERE param_used_1 = ? AND param_used_2 = ? AND param_value_1 = ? AND param_value_2 = ?", ("MCD_D", "MCD_Ls", MCD_wind[0], MCD_wind[1]))
-                                elif run_error_SRM:
-                                    cur.execute("SELECT id, h_p_diff FROM initial_variations WHERE param_used_1 = ? AND param_used_2 IS NULL AND param_value_1 = ?", ("SRM_error", SRM_error))
+                                for misalign in thrust_misalignments:
+                                    for payload_var in payload_mass_variations:
+                                        launch_lat, launch_lon = launch_lats[i_ll], launch_lons[i_ll]
+                                        SRM1_geo = R_o_1, R_i_1, N_a, w, r_f, delta_s, L
+                                        SRM2_geo = R_o_2, R_i_2
+                                        # Check if already run
+                                        if run_error_altitude:
+                                            cur.execute("SELECT id, h_p_diff FROM initial_variations WHERE param_used_1 = ? AND param_used_2 IS NULL AND param_value_1 = ?", ("start_h", start_h))
+                                        elif run_error_latlon:
+                                            cur.execute("SELECT id, h_p_diff FROM initial_variations WHERE param_used_1 = ? AND param_used_2 = ? AND param_value_1 = ? AND param_value_2 = ?", ("start_lat", "start_lon", launch_lat, launch_lon))
+                                        elif run_error_sepdelay:
+                                            cur.execute("SELECT id, h_p_diff FROM initial_variations WHERE param_used_1 = ? AND param_used_2 IS NULL AND param_value_1 = ?", ("sep_delay", sep_delay))
+                                        elif run_dens_var:
+                                            cur.execute("SELECT id, h_p_diff FROM initial_variations WHERE param_used_1 = ? AND param_used_2 IS NULL AND param_value_1 = ?", ("dens_var", dens_f))
+                                        elif try_MCD_winds:
+                                            cur.execute("SELECT id, h_p_diff FROM initial_variations WHERE param_used_1 = ? AND param_used_2 = ? AND param_value_1 = ? AND param_value_2 = ?", ("MCD_D", "MCD_Ls", MCD_wind[0], MCD_wind[1]))
+                                        elif run_error_SRM:
+                                            cur.execute("SELECT id, h_p_diff FROM initial_variations WHERE param_used_1 = ? AND param_used_2 IS NULL AND param_value_1 = ?", ("SRM_error", SRM_error))
+                                        elif run_misalignment:
+                                            cur.execute("SELECT id, h_p_diff FROM initial_variations WHERE param_used_1 = ? AND param_used_2 IS NULL AND param_value_1 = ?", ("misalign", misalign))
+                                        elif run_payload_var:
+                                            cur.execute("SELECT id, h_p_diff FROM initial_variations WHERE param_used_1 = ? AND param_used_2 IS NULL AND param_value_1 = ?", ("payload_var", payload_var))
 
-                                res = cur.fetchall()
-                                h_p_diff_db = None
-                                if len(res) != 0:
-                                    h_p_diff_db = res[0][1]
-                                    last_id = res[0][0]-1
-                                else:
-                                    # Get last db id
-                                    cur.execute("SELECT MAX(id) FROM initial_variations")
-                                    last_id = cur.fetchone()[0]
-                                    if last_id is None:
-                                        last_id = 1
-                                    # Insert new values
-                                    if run_error_altitude:
-                                        cur.execute("INSERT INTO initial_variations (id, param_used_1, param_value_1) VALUES (?, ?, ?)", (last_id+1, "start_h", start_h))
-                                    elif run_error_latlon:
-                                        cur.execute("INSERT INTO initial_variations (id, param_used_1, param_used_2, param_value_1, param_value_2) VALUES (?, ?, ?, ?, ?)", (last_id+1, "start_lat", "start_lon", launch_lat, launch_lon))
-                                    elif run_error_sepdelay:
-                                        cur.execute("INSERT INTO initial_variations (id, param_used_1, param_value_1) VALUES (?, ?, ?)", (last_id+1, "sep_delay", sep_delay))
-                                    elif run_dens_var:
-                                        cur.execute("INSERT INTO initial_variations (id, param_used_1, param_value_1) VALUES (?, ?, ?)", (last_id+1, "dens_var", dens_f))
-                                    elif try_MCD_winds:
-                                        cur.execute("INSERT INTO initial_variations (id, param_used_1, param_used_2, param_value_1, param_value_2) VALUES (?, ?, ?, ?, ?)", (last_id+1, "MCD_D", "MCD_Ls", MCD_wind[0], MCD_wind[1]))
-                                    elif run_error_SRM:
-                                        cur.execute("INSERT INTO initial_variations (id, param_used_1, param_value_1) VALUES (?, ?, ?)", (last_id+1, "SRM_error", SRM_error))
-                                # Add to inputs
-                                if h_p_diff_db is None:
-                                    inputs.append((last_id+1, start_h, angle_1, angle_2, TVC_angles_z, SRM1_geo, SRM2_geo, launch_lat, launch_lon, sep_delay, dens_f, MCD_wind, SRM_error))
-                                else:
-                                    print("Skipping, already run with ID %i." % last_id)
+                                        res = cur.fetchall()
+                                        h_p_diff_db = None
+                                        if len(res) != 0:
+                                            h_p_diff_db = res[0][1]
+                                            last_id = res[0][0]-1
+                                        else:
+                                            # Get last db id
+                                            cur.execute("SELECT MAX(id) FROM initial_variations")
+                                            last_id = cur.fetchone()[0]
+                                            if last_id is None:
+                                                last_id = 1
+                                            # Insert new values
+                                            if run_error_altitude:
+                                                cur.execute("INSERT INTO initial_variations (id, param_used_1, param_value_1) VALUES (?, ?, ?)", (last_id+1, "start_h", start_h))
+                                            elif run_error_latlon:
+                                                cur.execute("INSERT INTO initial_variations (id, param_used_1, param_used_2, param_value_1, param_value_2) VALUES (?, ?, ?, ?, ?)", (last_id+1, "start_lat", "start_lon", launch_lat, launch_lon))
+                                            elif run_error_sepdelay:
+                                                cur.execute("INSERT INTO initial_variations (id, param_used_1, param_value_1) VALUES (?, ?, ?)", (last_id+1, "sep_delay", sep_delay))
+                                            elif run_dens_var:
+                                                cur.execute("INSERT INTO initial_variations (id, param_used_1, param_value_1) VALUES (?, ?, ?)", (last_id+1, "dens_var", dens_f))
+                                            elif try_MCD_winds:
+                                                cur.execute("INSERT INTO initial_variations (id, param_used_1, param_used_2, param_value_1, param_value_2) VALUES (?, ?, ?, ?, ?)", (last_id+1, "MCD_D", "MCD_Ls", MCD_wind[0], MCD_wind[1]))
+                                            elif run_error_SRM:
+                                                cur.execute("INSERT INTO initial_variations (id, param_used_1, param_value_1) VALUES (?, ?, ?)", (last_id+1, "SRM_error", SRM_error))
+                                            elif run_misalignment:
+                                                cur.execute("INSERT INTO initial_variations (id, param_used_1, param_value_1) VALUES (?, ?, ?)", (last_id+1, "misalign", misalign))
+                                            elif run_payload_var:
+                                                cur.execute("INSERT INTO initial_variations (id, param_used_1, param_value_1) VALUES (?, ?, ?)", (last_id+1, "payload_var", payload_var))
+                                        # Add to inputs
+                                        if h_p_diff_db is None:
+                                            inputs.append((last_id+1, start_h, angle_1, angle_2, TVC_angles_z, SRM1_geo, SRM2_geo, launch_lat, launch_lon, sep_delay, dens_f, MCD_wind, SRM_error, misalign, payload_var))
+                                        else:
+                                            print("Skipping, already run with ID %i." % last_id)
         con.commit()
         # Run sims in parallel in batch of 500
         while len(inputs) > 0:
@@ -269,110 +287,110 @@ if __name__ == "__main__":
                 pool.starmap(run_sim, inputs_current)
 
     else:
-        # ### Initial altitude error
-        # cur.execute("SELECT param_value_1, h_p_diff, h_a_diff, i_diff FROM initial_variations WHERE param_used_1 = ? AND h_p_diff IS NOT NULL AND i_diff < 0.0007 AND i_diff > -0.0007 AND param_value_1 >= -2675 AND param_value_1 <= -2425", ("start_h",))
-        # res = cur.fetchall()
-        # altitudes = np.array(res)[:,0]
-        # altitudes_diffs = altitudes + 2550
-        # peri_errors, apo_errors, incli_errors = np.array(res)[:,1]/1e3, np.array(res)[:,2]/1e3, np.rad2deg(np.array(res)[:,3])
-        # print("Plotting for %i results"%len(altitudes))
+        ### Initial altitude error
+        cur.execute("SELECT param_value_1, h_p_diff, h_a_diff, i_diff FROM initial_variations WHERE param_used_1 = ? AND h_p_diff IS NOT NULL AND i_diff < 0.0007 AND i_diff > -0.0007 AND param_value_1 >= -2675 AND param_value_1 <= -2425", ("start_h",))
+        res = cur.fetchall()
+        altitudes = np.array(res)[:,0]
+        altitudes_diffs = altitudes + 2550
+        peri_errors, apo_errors, incli_errors = np.array(res)[:,1]/1e3, np.array(res)[:,2]/1e3, np.rad2deg(np.array(res)[:,3])
+        print("Plotting for %i results"%len(altitudes))
 
-        # # Make dataframe
-        # df = pd.DataFrame({"Launch altitude error [m]":altitudes_diffs, "Periapsis error [km]":peri_errors, "Apoapsis error [km]":apo_errors, "Inclination error [deg]":incli_errors})
-        # plt.figure(figsize=(9,9))
-        # g = sns.PairGrid(df, diag_sharey=False)
-        # g.map_diag(sns.kdeplot, shade=True)
-        # g.map_upper(sns.kdeplot, shade=True)
-        # g.map_lower(sns.scatterplot)
-        # g.tight_layout()
-        # plt.savefig(sys.path[0]+"/plots/optimisation/SA/initial/altitude_pairplot.pdf")
+        # Make dataframe
+        df = pd.DataFrame({"Launch altitude error [m]":altitudes_diffs, "Periapsis error [km]":peri_errors, "Apoapsis error [km]":apo_errors, "Inclination error [deg]":incli_errors})
+        plt.figure(figsize=(9,9))
+        g = sns.PairGrid(df, diag_sharey=False)
+        g.map_diag(sns.kdeplot, shade=True)
+        g.map_upper(sns.kdeplot, shade=True)
+        g.map_lower(sns.scatterplot)
+        g.tight_layout()
+        plt.savefig(sys.path[0]+"/plots/optimisation/SA/initial/altitude_pairplot.pdf")
 
-        # ### Initial lat/lon error
-        # cur.execute("SELECT param_value_1, param_value_2, h_p_diff, h_a_diff, i_diff FROM initial_variations WHERE param_used_1 = ? AND param_used_2 = ? AND h_p_diff IS NOT NULL AND i_diff < 0.0025 AND i_diff > -0.0025 AND param_value_1 IS NOT NULL AND param_value_2 IS NOT NULL", ("start_lat","start_lon",))
-        # res = cur.fetchall()
-        # lats = np.array(res)[:,0]
-        # lat_diffs = np.rad2deg(lats) - 18.85
-        # lons = np.array(res)[:,1]
-        # lon_diffs = np.rad2deg(lons) - 77.52
-        # peri_errors = np.array(res)[:,2]/1e3
-        # apo_errors = np.array(res)[:,3]/1e3
-        # incli_errors = np.rad2deg(np.array(res)[:,4])
-        # print("Plotting for %i results"%len(lats))
+        ### Initial lat/lon error
+        cur.execute("SELECT param_value_1, param_value_2, h_p_diff, h_a_diff, i_diff FROM initial_variations WHERE param_used_1 = ? AND param_used_2 = ? AND h_p_diff IS NOT NULL AND i_diff < 0.0025 AND i_diff > -0.0025 AND param_value_1 IS NOT NULL AND param_value_2 IS NOT NULL", ("start_lat","start_lon",))
+        res = cur.fetchall()
+        lats = np.array(res)[:,0]
+        lat_diffs = np.rad2deg(lats) - 18.85
+        lons = np.array(res)[:,1]
+        lon_diffs = np.rad2deg(lons) - 77.52
+        peri_errors = -np.array(res)[:,2]/1e3
+        apo_errors = -np.array(res)[:,3]/1e3
+        incli_errors = -np.rad2deg(np.array(res)[:,4])
+        print("Plotting for %i results"%len(lats))
 
-        # # Make dataframe
-        # df = pd.DataFrame({"Launch latitude error [deg]":lat_diffs, "Launch longitude error [deg]":lon_diffs, "Periapsis error [km]":peri_errors, "Apoapsis error [km]":apo_errors, "Inclination error [deg]":incli_errors})
-        # plt.figure(figsize=(9,9))
-        # g = sns.PairGrid(df, diag_sharey=False)
-        # g.map_diag(sns.kdeplot, shade=True)
-        # g.map_upper(sns.kdeplot, shade=True)
-        # g.map_lower(sns.scatterplot)
-        # g.tight_layout()
-        # plt.savefig(sys.path[0]+"/plots/optimisation/SA/initial/latlon_pairplot.pdf")
+        # Make dataframe
+        df = pd.DataFrame({"Launch latitude error [deg]":lat_diffs, "Launch longitude error [deg]":lon_diffs, "Periapsis error [km]":peri_errors, "Apoapsis error [km]":apo_errors, "Inclination error [deg]":incli_errors})
+        plt.figure(figsize=(9,9))
+        g = sns.PairGrid(df, diag_sharey=False)
+        g.map_diag(sns.kdeplot, shade=True)
+        g.map_upper(sns.kdeplot, shade=True)
+        g.map_lower(sns.scatterplot)
+        g.tight_layout()
+        plt.savefig(sys.path[0]+"/plots/optimisation/SA/initial/latlon_pairplot.pdf")
 
-        # ### Stage separation delay
-        # # cur.execute("SELECT param_value_1, h_p_diff, h_a_diff, i_diff FROM initial_variations WHERE param_used_1 = ? AND h_p_diff IS NOT NULL AND i_diff < 0.0025 AND i_diff > -0.0025 AND param_value_1 IS NOT NULL", ("sep_delay",))
-        # cur.execute("SELECT param_value_1, h_p_diff, h_a_diff, i_diff FROM initial_variations WHERE param_used_1 = ? AND h_p_diff IS NOT NULL AND param_value_1 IS NOT NULL", ("sep_delay",))
-        # res = cur.fetchall()
-        # sep_delays = np.array(res)[:,0]
-        # peri_errors = np.array(res)[:,1]/1e3
-        # apo_errors = np.array(res)[:,2]/1e3
-        # incli_errors = np.rad2deg(np.array(res)[:,3])
-        # print("Plotting for %i results"%len(sep_delays))
+        ### Stage separation delay
+        # cur.execute("SELECT param_value_1, h_p_diff, h_a_diff, i_diff FROM initial_variations WHERE param_used_1 = ? AND h_p_diff IS NOT NULL AND i_diff < 0.0025 AND i_diff > -0.0025 AND param_value_1 IS NOT NULL", ("sep_delay",))
+        cur.execute("SELECT param_value_1, h_p_diff, h_a_diff, i_diff FROM initial_variations WHERE param_used_1 = ? AND h_p_diff IS NOT NULL AND param_value_1 IS NOT NULL", ("sep_delay",))
+        res = cur.fetchall()
+        sep_delays = np.array(res)[:,0]
+        peri_errors = -np.array(res)[:,1]/1e3
+        apo_errors = -np.array(res)[:,2]/1e3
+        incli_errors = -np.rad2deg(np.array(res)[:,3])
+        print("Plotting for %i results"%len(sep_delays))
 
-        # # Make dataframe
-        # df = pd.DataFrame({"Stage separation delay [s]":sep_delays, "Periapsis error [km]":peri_errors, "Apoapsis error [km]":apo_errors, "Inclination error [deg]":incli_errors})
-        # plt.figure(figsize=(9,9))
-        # g = sns.PairGrid(df, diag_sharey=False)
-        # g.map_diag(sns.kdeplot, shade=True)
-        # g.map_upper(sns.kdeplot, shade=True)
-        # g.map_lower(sns.scatterplot)
-        # g.tight_layout()
-        # plt.savefig(sys.path[0]+"/plots/optimisation/SA/initial/sepdelay_pairplot.pdf")
+        # Make dataframe
+        df = pd.DataFrame({"Stage separation delay [s]":sep_delays, "Periapsis error [km]":peri_errors, "Apoapsis error [km]":apo_errors, "Inclination error [deg]":incli_errors})
+        plt.figure(figsize=(9,9))
+        g = sns.PairGrid(df, diag_sharey=False)
+        g.map_diag(sns.kdeplot, shade=True)
+        g.map_upper(sns.kdeplot, shade=True)
+        g.map_lower(sns.scatterplot)
+        g.tight_layout()
+        plt.savefig(sys.path[0]+"/plots/optimisation/SA/initial/sepdelay_pairplot.pdf")
 
-        # ### Density
-        # cur.execute("SELECT param_value_1, h_p_diff, h_a_diff, i_diff FROM initial_variations WHERE param_used_1 = ? AND h_p_diff IS NOT NULL AND param_value_1 IS NOT NULL", ("dens_var",))
-        # res = cur.fetchall()
-        # dens_vars = np.array(res)[:,0]
-        # peri_errors = np.array(res)[:,1]/1e3
-        # apo_errors = np.array(res)[:,2]/1e3
-        # incli_errors = np.rad2deg(np.array(res)[:,3])
-        # print("Plotting for %i results"%len(dens_vars))
+        ### Density
+        cur.execute("SELECT param_value_1, h_p_diff, h_a_diff, i_diff FROM initial_variations WHERE param_used_1 = ? AND h_p_diff IS NOT NULL AND param_value_1 IS NOT NULL", ("dens_var",))
+        res = cur.fetchall()
+        dens_vars = np.array(res)[:,0]
+        peri_errors = -np.array(res)[:,1]/1e3
+        apo_errors = -np.array(res)[:,2]/1e3
+        incli_errors = -np.rad2deg(np.array(res)[:,3])
+        print("Plotting for %i results"%len(dens_vars))
 
-        # # Make dataframe
-        # df = pd.DataFrame({"Density scaling [-]":dens_vars, "Periapsis error [km]":peri_errors, "Apoapsis error [km]":apo_errors, "Inclination error [deg]":incli_errors})
-        # plt.figure(figsize=(9,9))
-        # g = sns.PairGrid(df, diag_sharey=False)
-        # g.map_diag(sns.kdeplot, shade=True)
-        # g.map_upper(sns.kdeplot, shade=True)
-        # g.map_lower(sns.scatterplot)
-        # g.tight_layout()
-        # plt.savefig(sys.path[0]+"/plots/optimisation/SA/initial/densvar_pairplot.pdf")
+        # Make dataframe
+        df = pd.DataFrame({"Density scaling [-]":dens_vars, "Periapsis error [km]":peri_errors, "Apoapsis error [km]":apo_errors, "Inclination error [deg]":incli_errors})
+        plt.figure(figsize=(9,9))
+        g = sns.PairGrid(df, diag_sharey=False)
+        g.map_diag(sns.kdeplot, shade=True)
+        g.map_upper(sns.kdeplot, shade=True)
+        g.map_lower(sns.scatterplot)
+        g.tight_layout()
+        plt.savefig(sys.path[0]+"/plots/optimisation/SA/initial/densvar_pairplot.pdf")
 
-        # ### Winds
-        # cur.execute("SELECT h_p_diff, h_a_diff, i_diff FROM initial_variations WHERE param_used_1 = ? AND h_p_diff IS NOT NULL AND param_value_1 IS NOT NULL", ("MCD_D",))
-        # res = cur.fetchall()
-        # peri_errors = np.array(res)[:,0]/1e3
-        # apo_errors = np.array(res)[:,1]/1e3
-        # incli_errors = np.rad2deg(np.array(res)[:,2])
-        # print("Plotting for %i results"%len(peri_errors))
+        ### Winds
+        cur.execute("SELECT h_p_diff, h_a_diff, i_diff FROM initial_variations WHERE param_used_1 = ? AND h_p_diff IS NOT NULL AND param_value_1 IS NOT NULL", ("MCD_D",))
+        res = cur.fetchall()
+        peri_errors = -np.array(res)[:,0]/1e3
+        apo_errors = -np.array(res)[:,1]/1e3
+        incli_errors = -np.rad2deg(np.array(res)[:,2])
+        print("Plotting for %i results"%len(peri_errors))
 
-        # # Make dataframe
-        # df = pd.DataFrame({"Periapsis error [km]":peri_errors, "Apoapsis error [km]":apo_errors, "Inclination error [deg]":incli_errors})
-        # plt.figure(figsize=(9,9))
-        # g = sns.PairGrid(df, diag_sharey=False)
-        # g.map_diag(sns.kdeplot, shade=True)
-        # g.map_upper(sns.kdeplot, shade=True)
-        # g.map_lower(sns.scatterplot)
-        # g.tight_layout()
-        # plt.savefig(sys.path[0]+"/plots/optimisation/SA/initial/MCD_pairplot.pdf")
+        # Make dataframe
+        df = pd.DataFrame({"Periapsis error [km]":peri_errors, "Apoapsis error [km]":apo_errors, "Inclination error [deg]":incli_errors})
+        plt.figure(figsize=(9,9))
+        g = sns.PairGrid(df, diag_sharey=False)
+        g.map_diag(sns.kdeplot, shade=True)
+        g.map_upper(sns.kdeplot, shade=True)
+        g.map_lower(sns.scatterplot)
+        g.tight_layout()
+        plt.savefig(sys.path[0]+"/plots/optimisation/SA/initial/MCD_pairplot.pdf")
 
         ### SRM Size
         cur.execute("SELECT param_value_1, h_p_diff, h_a_diff, i_diff FROM initial_variations WHERE param_used_1 = ? AND h_p_diff IS NOT NULL AND param_value_1 IS NOT NULL", ("SRM_error",))
         res = cur.fetchall()
         SRM_errors = np.array(res)[:,0]*1e3
-        peri_errors = np.array(res)[:,1]/1e3
-        apo_errors = np.array(res)[:,2]/1e3
-        incli_errors = np.rad2deg(np.array(res)[:,3])
+        peri_errors = -np.array(res)[:,1]/1e3
+        apo_errors = -np.array(res)[:,2]/1e3
+        incli_errors = -np.rad2deg(np.array(res)[:,3])
         print("Plotting for %i results"%len(SRM_errors))
 
         # Make dataframe
@@ -385,4 +403,25 @@ if __name__ == "__main__":
         g.tight_layout()
         plt.savefig(sys.path[0]+"/plots/optimisation/SA/initial/SRM_pairplot.pdf")
 
+        ### SRM Size
+        cur.execute("SELECT param_value_1, h_p_diff, h_a_diff, i_diff FROM initial_variations WHERE param_used_1 = ? AND h_p_diff IS NOT NULL AND param_value_1 IS NOT NULL", ("misalign",))
+        res = cur.fetchall()
+        misalignments = np.array(res)[:,0]
+        peri_errors = -np.array(res)[:,1]/1e3
+        apo_errors = -np.array(res)[:,2]/1e3
+        incli_errors = -np.rad2deg(np.array(res)[:,3])
+        print("Plotting for %i results"%len(misalignments))
+
+        # Make dataframe
+        df = pd.DataFrame({"Thrust misalignment [deg]":np.rad2deg(misalignments), "Periapsis error [km]":peri_errors, "Apoapsis error [km]":apo_errors, "Inclination error [deg]":incli_errors})
+        plt.figure(figsize=(9,9))
+        g = sns.PairGrid(df, diag_sharey=False)
+        g.map_diag(sns.kdeplot, shade=True)
+        g.map_upper(sns.kdeplot, shade=True)
+        g.map_lower(sns.scatterplot)
+        g.tight_layout()
+        plt.savefig(sys.path[0]+"/plots/optimisation/SA/initial/misalign_pairplot.pdf")
+
     con.close()
+
+# TODO: replot all errors * -1 and adapt discussion (+ figure caption)

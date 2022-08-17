@@ -21,6 +21,7 @@ from tudatpy.kernel.numerical_simulation import environment, environment_setup
 from tudatpy.kernel.numerical_simulation import propagation, propagation_setup
 from tudatpy.util import result2array
 from tudatpy.kernel.math import root_finders
+from scipy.interpolate import interp1d
 
 # Custom imports
 from thrust.MAV_thrust import MAV_thrust
@@ -37,6 +38,19 @@ class FakeAeroGuidance(propagation.AerodynamicGuidance):
     def updateGuidance(self, current_time):
         # Update angle of attack
         self.angle_of_attack = np.deg2rad(1.5) * np.sin(current_time*np.pi/750)
+
+class TVCAeroGuidance(propagation.AerodynamicGuidance):
+
+    def __init__(self, TVC_angles, t_b):
+        propagation.AerodynamicGuidance.__init__(self)
+        nodes_t = np.linspace(0, t_b, len(TVC_angles))
+        self.angle_interpolator = interp1d(nodes_t, TVC_angles, kind="linear")
+
+    def updateGuidance(self, current_time):
+        try:
+            self.angle_of_attack = self.angle_interpolator(current_time)
+        except ValueError:
+            self.angle_of_attack = 0.0
 
 class MAV_ascent:
     """
@@ -202,7 +216,8 @@ class MAV_ascent:
         use_cpp=False,
         better_precision=False,
         extra_thrust_dt=False,
-        sep_delay=0
+        sep_delay=0,
+        misalign=0
     ):
         delay = 0 if self.current_stage == 1 else sep_delay
         # Setup the MAV thrust class from the thrust models input to this ascent class
@@ -216,7 +231,8 @@ class MAV_ascent:
             dt=thrust_dt,
             use_cpp=use_cpp,
             extra_thrust_dt=extra_thrust_dt,
-            delay=delay)
+            delay=delay,
+            misalign=misalign)
 
         # Define the thrust acceleration direction and magnitude from the thrust class
         thrust_direction_settings = propagation_setup.thrust.custom_thrust_direction(self.thrust.get_thrust_orientation)

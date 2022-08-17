@@ -18,10 +18,11 @@ from thrust.solid_thrust_multi_stage import SRM_thrust_rk4
 class MAV_thrust:
 
     def __init__(self, ascent_model, angle, thrust_model, body_directions_y=0, body_directions_z=0,
-    print_status=False, dt=None, thrust_filename=None, thrust_devs=[0, 0], use_cpp=False, extra_thrust_dt=False, delay=0):
+    print_status=False, dt=None, thrust_filename=None, thrust_devs=[0, 0], use_cpp=False, extra_thrust_dt=False, delay=0, misalign=0):
         self.angle = angle
         self.thrust_model = thrust_model
         self.delay = delay
+        self.misalign = misalign
         if dt is None:
             dt = 2.0e-6 if ascent_model.current_stage == 1 else 1.5e-2
         if extra_thrust_dt:
@@ -112,8 +113,8 @@ class MAV_thrust:
         if self.time_elapsed > self.burn_time or self.time_elapsed < 0:
             return np.zeros((3,3))
         else:
-            angle_y = self.body_direction_y_function(self.time_elapsed)
-            angle_z = self.body_direction_z_function(self.time_elapsed)
+            angle_y = self.body_direction_y_function(self.time_elapsed)+self.misalign
+            angle_z = self.body_direction_z_function(self.time_elapsed)+self.misalign
             T_y = np.array([
                 [np.cos(angle_y),   0,      -np.sin(angle_y)],
                 [0,                 1,      0],
